@@ -293,7 +293,8 @@ test('map files are cached only as they are viewed, and reused offline', async (
   await page.reload();
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
   const cached = () => page.evaluate(async () => ((await caches.has('map-tiles')) ? (await (await caches.open('map-tiles')).keys()).map((r) => r.url) : []));
-  expect(await cached()).toEqual([]); // nothing fetched ahead of time
+  // Nothing fetched ahead of time. (On desktop the map is always on screen, so it may already be cached.)
+  if (page.viewportSize().width < 1000) expect(await cached()).toEqual([]);
   await page.goto('/#map');
   await expect.poll(cached).toContain('https://tiles.openfreemap.org/styles/liberty');
   await context.setOffline(true);
