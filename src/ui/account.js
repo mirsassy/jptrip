@@ -112,21 +112,32 @@ export function accountCard() {
 }
 
 /* ---------------- Administrator: people with access ---------------- */
+let changes = 0;
+let latestUsers = null;
 export function adminCard() {
   const box = h('div', { class: 'card', id: 'admin-panel' });
   const list = h('div', null, h('p', { class: 'muted small' }, 'Loading…'));
+  // A change (add, reset, unlock, remove) returns the new list; a list request that was already
+  // on its way when the change happened is older, so it must not overwrite it.
   const draw = (users) => {
+    changes++;
+    latestUsers = users;
+    show(users);
+  };
+  const show = (users) => {
     clear(list);
     if (!users) return;
     users.forEach((u) => list.append(userRow(u, draw)));
   };
+  if (latestUsers) show(latestUsers);
   box.append(
     h('h3', { style: { marginTop: 0 } }, 'People with access'),
     h('p', { class: 'small muted' }, 'Only you see this. Add each family member with their email and a starting PIN; they are asked to choose their own PIN when they first sign in.'),
     list,
     h('div', { class: 'row', style: { marginTop: '12px' } }, h('button', { class: 'btn primary', onclick: () => openAddPerson(draw) }, icon('plus', 18), 'Add a person')));
   if (!navigator.onLine) { clear(list).append(h('p', { class: 'muted small' }, 'Managing access needs an internet connection.')); return box; }
-  admin('adminListUsers').then(draw).catch((e) => { clear(list).append(h('p', { class: 'small err' }, errText(e))); });
+  const asked = changes;
+  admin('adminListUsers').then((users) => { if (asked === changes) { latestUsers = users; show(users); } }).catch((e) => { clear(list).append(h('p', { class: 'small err' }, errText(e))); });
   return box;
 }
 
