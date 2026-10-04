@@ -5,6 +5,7 @@ Open decisions and things that could not be verified while building the app. Iti
 ## For the trip organizer to do
 
 - [x] Turn on GitHub Pages (done; the app is published).
+- [x] Build the web app address into the app (GitHub variable TRIP_SCRIPT_URL; done).
 - [ ] Everything in Part 2 of [SETUP.md](SETUP.md): add and deploy the Apps Script, make yourself administrator, add the family.
 - [ ] Try the app on a real iPhone and a real Android phone (install, offline, add an entry, sign out).
 - [ ] Turn on 2-step verification for the Google and GitHub accounts.
