@@ -1,0 +1,16 @@
+{
+  "name": "Japan Trip",
+  "short_name": "Japan Trip",
+  "description": "Family trip planner: day plans, map, weather and bookings.",
+  "start_url": "./#day",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f4f1",
+  "theme_color": "#b7282e",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
