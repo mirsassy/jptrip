@@ -10,9 +10,9 @@ From the trip organizer you get an **invite link**, the **email** you sign in wi
 1. Open the **invite link** in **Safari**.
 2. Tap the **Share** button (square with an arrow) → **Add to Home Screen** → **Add**.
 3. Open the app from your home screen.
-4. Paste the **invite link** into the first box (copy it again from the message), enter your **email** and **PIN**, and tap **Sign in**.
+4. Enter your **email** and **PIN**, and tap **Sign in**. (If it also asks for an invite link, paste the link from the organizer's message.)
 
-Why paste the link again? iPhone keeps home-screen apps separate from Safari, so the app needs it once more. You only do this once.
+iPhone keeps home-screen apps separate from Safari, so you sign in once inside the installed app.
 
 ### Android
 1. Open the **invite link** in **Chrome**.

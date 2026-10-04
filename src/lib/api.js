@@ -3,6 +3,9 @@
 
 const CONFIG_KEY = 'trip.config.v1';
 
+/** The Sheet's web app address, built into the published app (GitHub variable TRIP_SCRIPT_URL) so people sign in with just email and PIN. */
+export const BUILT_IN_URL = (import.meta.env && import.meta.env.VITE_SCRIPT_URL) || '';
+
 export function loadConfig() {
   try { return JSON.parse(localStorage.getItem(CONFIG_KEY)) || {}; } catch { return {}; }
 }

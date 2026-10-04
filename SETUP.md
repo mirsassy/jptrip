@@ -26,6 +26,7 @@ About 25 minutes. Do them in this order.
 - [ ] 3. Turn on automatic location filling (1 min)
 - [ ] 4. Publish the script as a web app (3 min)
 - [ ] 5. Optional: let the app read bookings with Claude (5 min)
+- [ ] 4b. Build the web app address into the app, so people sign in with only email and PIN (2 min)
 - [ ] 6. Sign in on your phone (2 min)
 - [ ] 7. Add the family (1 min each)
 - [ ] 8. Security housekeeping (5 min)
@@ -63,6 +64,16 @@ Only someone who can open the Sheet's menu (only you) can create or replace the 
 
 After any later change to `Code.gs`: **Deploy → Manage deployments → pencil → Version: New version → Deploy** (the URL stays the same).
 
+#### 4b. Build the address into the app (2 min)
+
+So nobody has to paste the Web app URL:
+
+1. Open https://github.com/mirsassy/jptrip → **Settings → Secrets and variables → Actions → Variables** tab → **New repository variable**.
+2. Name `TRIP_SCRIPT_URL`, value: the Web app URL (ends in `/exec`). **Add variable**.
+3. **Actions** tab → **Test and deploy to GitHub Pages** → **Run workflow** (or ask Claude to push any change). When it is green, the sign-in screen shows only Email and PIN, and invites are just the app address.
+
+Trade-off: the address becomes readable by anyone who inspects the published app. It does not open the data (that still needs an email and PIN, with lockout after wrong PINs), but someone who knows a family member's email could lock that account for 15 minutes by guessing. Without this step, the app keeps asking for the invite link.
+
 ### 5. Optional: let the app read bookings with Claude (5 min)
 
 The **+ → Import from a file or pasted text** button sends a confirmation email, PDF or screenshot to Claude, which fills in the forms. It needs an Anthropic API key, which is paid per use: roughly 2–10 US cents per document. Skip this step and the button tells people it is not turned on.
@@ -79,7 +90,7 @@ Uploaded files are kept in a Drive folder named **Trip app uploads**, created th
 ### 6. Sign in on your phone (2 min)
 
 1. Open the app address on your phone.
-2. Paste the Web app URL into **Invite link**, enter your email and administrator PIN, tap **Sign in**.
+2. Enter your email and administrator PIN, tap **Sign in**. (Without step 4b, first paste the Web app URL into **Invite link**.)
 3. iPhone: **Share → Add to Home Screen**, open it from the home screen, and sign in once more there (iPhone keeps home-screen apps separate from Safari). Android: tap **Install** when Chrome offers it.
 
 ### 7. Add the family (1 min each)

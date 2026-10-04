@@ -68,7 +68,7 @@ test('first sign-in: invite link, email and PIN, then a prompt to choose your ow
   await page.clock.install({ time: new Date('2030-01-15T12:00:00+09:00') });
   await page.clock.resume();
   await page.goto(`/#setup=${encodeURIComponent(API)}`);
-  await expect(page.getByRole('heading', { name: 'Welcome' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
   await expect(page.locator('input[type=url]')).toHaveValue(API);
   await page.getByLabel('Email').fill(blake.email);
   await page.getByLabel('PIN', { exact: true }).fill('000111');
@@ -124,7 +124,7 @@ test('five wrong PINs lock the account for 15 minutes', async ({ page, context }
 test('installed app (iPhone keeps separate storage): pasting the invite link connects', async ({ page, context }) => {
   await stubNetwork(context);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Welcome' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
   await page.locator('input[type=url]').fill(`https://example.github.io/trip/#setup=${encodeURIComponent(API)}`);
   await page.getByLabel('Email').fill(casey.email);
   await page.getByLabel('PIN', { exact: true }).fill(casey.pin);
@@ -309,7 +309,7 @@ test('removing a person’s access erases the trip from their phone at the next 
   expect((await deviceStorage(page)).idb).toBeGreaterThan(0);
   await fetch(`${API}/revoke?email=${casey.email}`, { method: 'POST' });
   await page.locator('.sync-pill').click();
-  await expect(page.getByRole('heading', { name: 'Welcome' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
   await expect(page.getByText('this device’s copy of the trip was erased')).toBeVisible();
   const after = await deviceStorage(page);
   expect(after.idb).toBe(0);
@@ -323,7 +323,7 @@ test('sign out ends the session and erases the trip and saved map areas from the
   await expect(page.locator('.kv').nth(1)).toContainText('Casey (casey@example.com)');
   page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Sign out and erase this device' }).click();
-  await expect(page.getByRole('heading', { name: 'Welcome' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
   const after = await deviceStorage(page);
   expect(after.keys).toEqual([]);
   expect(after.config).toBe(null);
@@ -516,6 +516,14 @@ test('import: clear messages when reading is off, or nothing is found', async ({
   await dlg.locator('textarea[name=import-text]').fill('NOTHING here');
   await dlg.getByRole('button', { name: 'Read it' }).click();
   await expect(page.getByRole('dialog', { name: 'Bookings found' })).toContainText('No bookings were found');
+});
+
+test('the gear opens Settings and, tapped again, goes back', async ({ page, context }) => {
+  await open(page, context, { hash: '#list' });
+  await page.getByRole('link', { name: 'Settings' }).click();
+  await expect(page).toHaveURL(/#settings$/);
+  await page.getByRole('link', { name: 'Settings' }).click();
+  await expect(page).toHaveURL(/#list$/);
 });
 
 test('a change made directly in the Sheet shows up after sync', async ({ page, context }) => {

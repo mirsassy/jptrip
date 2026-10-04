@@ -260,3 +260,5 @@ button.link { background: none; border: 0; padding: 0; cursor: pointer; text-dec
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; word-break: break-word; }
 .card.done { opacity: .75; }
+/* Sign-in screen: nothing but the form */
+body[data-view="setup"] .sync-pill, body[data-view="setup"] header .icon-btn, body[data-view="setup"] nav.bottom, body[data-view="setup"] .top-nav { display: none; }

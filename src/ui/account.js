@@ -1,7 +1,7 @@
 // Sign-in, PIN changes, and the administrator's "People with access" panel.
 import { h, icon, clear, sheet, toast } from './dom.js';
 import { state, signIn, signOut, changePin, admin, sync } from '../lib/store.js';
-import { ERROR_TEXT, scriptUrlFrom, pinProblem, randomPin } from '../lib/api.js';
+import { ERROR_TEXT, scriptUrlFrom, pinProblem, randomPin, BUILT_IN_URL } from '../lib/api.js';
 import { ago, fmtJstStamp } from '../lib/dates.js';
 import { safeUrl, personChip } from './common.js';
 import { openEditor } from './forms.js';
@@ -13,13 +13,13 @@ const pinInput = (attrs = {}) => h('input', { type: 'password', inputmode: 'nume
 export function renderSignIn(root) {
   clear(root);
   const c = state.config;
-  const url = h('input', { type: 'url', value: c.url || '', placeholder: 'Paste the invite link', autocomplete: 'off', inputmode: 'url' });
+  const url = h('input', { type: 'url', value: c.url || BUILT_IN_URL, placeholder: 'Paste the invite link', autocomplete: 'off', inputmode: 'url' });
   const email = h('input', { type: 'email', autocomplete: 'username', inputmode: 'email', autocapitalize: 'none', spellcheck: 'false' });
   const pin = pinInput({ autocomplete: 'current-password' });
   const status = h('div', { class: 'small', 'aria-live': 'polite' });
   const go = h('button', { class: 'btn primary', type: 'submit' }, 'Sign in');
   const form = h('form', null,
-    h('label', { class: 'field' }, h('span', null, 'Invite link ', h('span', { class: 'hint' }, '(from the trip organizer)')), url),
+    h('label', { class: 'field', hidden: BUILT_IN_URL || c.url ? true : null }, h('span', null, 'Invite link ', h('span', { class: 'hint' }, '(from the trip organizer)')), url),
     h('label', { class: 'field' }, h('span', null, 'Email'), email),
     h('label', { class: 'field' }, h('span', null, 'PIN'), pin),
     h('div', { class: 'row' }, go), status);
@@ -46,8 +46,7 @@ export function renderSignIn(root) {
     }
   });
   root.append(h('div', { class: 'card', style: { maxWidth: '560px', margin: '16px auto' } },
-    h('h2', { style: { marginTop: 0 } }, 'Welcome'),
-    h('p', null, 'Sign in with the email and PIN the trip organizer gave you. You only do this once on each device.'),
+    h('h2', { style: { marginTop: 0 } }, 'Sign in'),
     form));
 }
 
@@ -153,7 +152,7 @@ function userRow(u, redraw) {
 
 /** Text the administrator sends to a new person (the PIN is best sent separately). */
 function inviteText(u, pin) {
-  const link = `${location.origin}${location.pathname}#setup=${encodeURIComponent(state.config.url || '')}`;
+  const link = state.config.url === BUILT_IN_URL ? `${location.origin}${location.pathname}` : `${location.origin}${location.pathname}#setup=${encodeURIComponent(state.config.url || '')}`;
   return { link, text: `Trip app: ${link}\nSign in with ${u.email}${pin ? ` and PIN ${pin}` : ''}. You'll be asked to choose your own PIN.` };
 }
 

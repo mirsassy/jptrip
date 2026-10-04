@@ -45,6 +45,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+        env:
+          # The Sheet's web app address (Settings → Secrets and variables → Actions → Variables).
+          # Built into the app so people sign in with only email and PIN.
+          VITE_SCRIPT_URL: ${{ vars.TRIP_SCRIPT_URL }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

@@ -24,7 +24,11 @@ const topNav = h('nav', { class: 'top-nav', 'aria-label': 'Views' });
 const bottomNav = h('nav', { class: 'bottom', 'aria-label': 'Views' });
 const title = h('h1', null, 'Japan trip');
 const header = h('header', { class: 'top' }, title, topNav, h('div', { class: 'spacer' }), syncPill, filterBtn,
-  h('a', { class: 'icon-btn', href: '#settings', 'aria-label': 'Settings' }, icon('gear')));
+  h('a', { class: 'icon-btn', href: '#settings', 'aria-label': 'Settings', onclick: (e) => {
+    // The gear toggles: on Settings, it goes back to the view you came from
+    if (route() === 'settings' && !needsSetup()) { e.preventDefault(); location.hash = `#${lastView}`; }
+  } }, icon('gear')));
+let lastView = 'day';
 const paneMain = h('section', { class: 'pane pane-main', 'aria-live': 'off' });
 const paneMap = h('section', { class: 'pane pane-map' });
 const fab = h('button', { class: 'fab', 'aria-label': 'Add to the trip', onclick: openAddMenu }, icon('plus', 26));
@@ -80,6 +84,7 @@ function render() {
   let view = route();
   if (view === 'setup' || (needsSetup() && view !== 'settings')) view = 'setup';
   document.body.dataset.view = view;
+  if (VIEWS.some(([id]) => id === view)) lastView = view;
   conflicts = findConflicts(state.model);
   renderChrome(view);
   fab.classList.toggle('hidden', view === 'setup' || view === 'settings' || (view === 'map' && !isDesktop()) || needsSetup());
