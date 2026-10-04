@@ -114,21 +114,24 @@ export function accountCard() {
 /* ---------------- Administrator: people with access ---------------- */
 let changes = 0;
 let latestUsers = null;
+let showCurrent = () => {};
 export function adminCard() {
   const box = h('div', { class: 'card', id: 'admin-panel' });
   const list = h('div', null, h('p', { class: 'muted small' }, 'Loading…'));
   // A change (add, reset, unlock, remove) returns the new list; a list request that was already
   // on its way when the change happened is older, so it must not overwrite it.
+  // Settings can be redrawn while a change is in flight, so the result goes to whichever card is on screen now.
   const draw = (users) => {
     changes++;
     latestUsers = users;
-    show(users);
+    showCurrent(users);
   };
   const show = (users) => {
     clear(list);
     if (!users) return;
     users.forEach((u) => list.append(userRow(u, draw)));
   };
+  showCurrent = show;
   if (latestUsers) show(latestUsers);
   box.append(
     h('h3', { style: { marginTop: 0 } }, 'People with access'),
