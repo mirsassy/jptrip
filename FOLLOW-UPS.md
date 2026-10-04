@@ -4,10 +4,11 @@ Open decisions and things that could not be verified while building the app. Iti
 
 ## For the trip organizer to do
 
-- [ ] Everything in Part 2 of [SETUP.md](SETUP.md): turn on Pages, add and deploy the Apps Script, make yourself administrator, add the family.
+- [x] Turn on GitHub Pages (done; the app is published).
+- [ ] Everything in Part 2 of [SETUP.md](SETUP.md): add and deploy the Apps Script, make yourself administrator, add the family.
 - [ ] Try the app on a real iPhone and a real Android phone (install, offline, add an entry, sign out).
 - [ ] Turn on 2-step verification for the Google and GitHub accounts.
-- [ ] Optional: create an Anthropic API key with a spend limit and set it from the Sheet menu (SETUP step 4b). When the "Trip app uploads" folder appears in Drive, move it into the Claude folder.
+- [ ] Optional: create an Anthropic API key with a spend limit and set it from the Sheet menu (SETUP step 5). When the "Trip app uploads" folder appears in Drive, move it into the Claude folder.
 
 ## Design decisions to revisit
 
@@ -48,4 +49,3 @@ Open decisions and things that could not be verified while building the app. Iti
 - [ ] **Drive permission**: the script uses the Drive REST API with the `drive.file` scope (DriveApp would need access to the whole Drive). Whether moving the uploads folder into the Claude folder keeps access was not tested live; it should, since the script created the folder.
 - [ ] **Geocoding after the manifest change**: the manifest now lists its permissions explicitly. The Maps geocoder is believed to need none of its own; if map pins stop being filled in after the update, that is the first thing to check.
 - [ ] **Anthropic data use**: that API inputs are not used for training is from memory of Anthropic's commercial terms, not re-checked from here.
-- [ ] The GitHub Actions workflow first runs on GitHub with the initial push; publishing needs Pages turned on (SETUP Part 2, step 1).

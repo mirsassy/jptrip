@@ -13,7 +13,7 @@ A family trip planner for Japan that runs on phones and desktops, works offline,
 - **Checks**: a child booked with no adult or without a parent from their household, a party size that differs from Who, a person in two places at overlapping times, two stays on one night, a night with no stay (overnight trains/flights excepted), a reservation in a city the person isn't in that day, cancellation deadlines in the next 72 hours, and Sheet rows with unknown names or unreadable dates.
 - **Families**: people can belong to a household (parents and their children; People tab, Household column). A household name works in any Who field, reservations show "4 adults, 2 children (7, 3)" and fill in their party size from Who, and children have no sign-in: their parents act for them.
 - **Forms** for every tab, with dropdowns from the Lists, People and Groups tabs, and one-tap **Move to Reservations** for restaurant ideas. Stays, transport and reservations require choosing **Who** is going.
-- **Import**: paste a confirmation email or upload a PDF, photo or screenshot; Claude (Anthropic's API, called by the Sheet's script) reads it and each booking opens in its form, pre-filled, for a person to check, choose Who and add. The file can be kept with the booking (an **Attachment** link) in a private Drive folder and opened from the app. Optional; needs an API key (see [SETUP.md](SETUP.md#4b-optional-let-the-app-read-bookings-with-claude-5-min)).
+- **Import**: paste a confirmation email or upload a PDF, photo or screenshot; Claude (Anthropic's API, called by the Sheet's script) reads it and each booking opens in its form, pre-filled, for a person to check, choose Who and add. The file can be kept with the booking (an **Attachment** link) in a private Drive folder and opened from the app. Optional; needs an API key (see [SETUP.md](SETUP.md#5-optional-let-the-app-read-bookings-with-claude-5-min)).
 - **Offline**: the app, the latest data and weather are kept on the device; edits made offline are queued and sent when back online. The top bar shows when it last synced.
 
 Dates are never hard-coded: the trip range is derived from the earliest and latest dates in the Sheet.
@@ -107,7 +107,7 @@ npm run e2e           # Playwright: iPhone-size, Android-size and desktop Chromi
 npm run build         # production build in dist/
 ```
 
-Updating the Apps Script after changing `apps-script/Code.gs`: paste it into the Sheet's script editor and deploy a new version (see [SETUP.md](SETUP.md#5-deploy-the-script-as-a-web-app)).
+Updating the Apps Script after changing `apps-script/Code.gs`: paste it into the Sheet's script editor and deploy a new version (see [SETUP.md](SETUP.md#4-publish-the-script-as-a-web-app)).
 
 ## What was and wasn't tested
 
