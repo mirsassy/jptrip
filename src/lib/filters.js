@@ -28,7 +28,7 @@ export function saveFilters(f, storage = globalThis.localStorage) {
 /** People selected by the person and group filters; empty = no restriction. */
 export function selectedPeople(model, f) {
   const set = new Set(f.people);
-  f.groups.forEach((g) => [...model.groups, ...(model.households || [])].find((x) => x.name === g)?.members.forEach((m) => set.add(m)));
+  f.groups.forEach((g) => model.groups.find((x) => x.name === g)?.members.forEach((m) => set.add(m)));
   return model.people.map((p) => p.name).filter((n) => set.has(n));
 }
 

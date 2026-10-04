@@ -42,6 +42,24 @@ export function weatherChip(city, date, stay) {
 }
 
 /** Google Maps and Apple Maps links for an item's location. */
+/** One "Google Maps" link: the place, or for transport the route from → to. */
+export function googleMapsLink(it) {
+  let href;
+  if (it.type === 'transport') {
+    const end = (l, name) => (l && !l.approx ? `${l.lat},${l.lng}` : name);
+    const o = end(it.fromLoc, it.from), d = end(it.toLoc, it.to);
+    if (!o || !d) return null;
+    href = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(o)}&destination=${encodeURIComponent(d)}&travelmode=transit`;
+  } else if (it.loc && !it.loc.approx) {
+    href = `https://www.google.com/maps/search/?api=1&query=${it.loc.lat},${it.loc.lng}`;
+  } else {
+    const q = it.address || [it.title, it.city].filter(Boolean).join(', ');
+    if (!q) return null;
+    href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+  }
+  return h('a', { class: 'btn small', href, target: '_blank', rel: 'noopener' }, icon('pin', 14), 'Google Maps', icon('ext', 14));
+}
+
 export function mapLinks(it, loc = it.loc) {
   const name = [it.title, it.address || it.city].filter(Boolean).join(', ');
   let g, a;

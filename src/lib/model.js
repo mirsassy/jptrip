@@ -43,7 +43,7 @@ export function buildModel(data) {
   const people = rows('People').filter((r) => norm(r.Name)).map((r, i) => {
     const color = /^#?[0-9a-f]{6}$/i.test(norm(r['Color (hex)'])) ? `#${norm(r['Color (hex)']).replace('#', '')}` : FALLBACK_COLORS[i % FALLBACK_COLORS.length];
     const age = norm(r.Notes).match(/\bage\s*(\d{1,2})\b/i);
-    return { name: norm(r.Name), color, child: lc(r['Adult or child']) === 'child', age: age ? +age[1] : null, household: norm(r.Household), notes: norm(r.Notes), raw: r };
+    return { name: norm(r.Name), color, child: lc(r['Adult or child']) === 'child', age: age ? +age[1] : null, notes: norm(r.Notes), raw: r };
   });
   const peopleByLc = new Map(people.map((p) => [p.name.toLowerCase(), p]));
   const allNames = people.map((p) => p.name);
@@ -55,25 +55,25 @@ export function buildModel(data) {
     const members = norm(r.Members).split(/[,;]/).map(lc).filter(Boolean).map((n) => peopleByLc.get(n)?.name).filter(Boolean);
     groups.push({ name, members, notes: norm(r.Notes), raw: r });
   });
-  if (!groups.some((g) => g.name.toLowerCase() === 'everyone')) groups.unshift({ name: 'Everyone', members: allNames, notes: '', implicit: true });
-
-  // Households (People tab, Household column): parents and their children, one household per person
-  const hhMap = new Map();
-  people.forEach((p) => {
-    if (!p.household) return;
-    const k = p.household.toLowerCase();
-    if (!hhMap.has(k)) hhMap.set(k, { name: p.household, members: [], adults: [], children: [] });
-    const hh = hhMap.get(k);
-    hh.members.push(p.name);
-    (p.child ? hh.children : hh.adults).push(p.name);
+  // "Everyone" is always the whole People tab, whatever a Groups row of that name lists
+  const realGroups = groups.filter((g) => g.name.toLowerCase() !== 'everyone');
+  groups.length = 0;
+  groups.push(...realGroups);
+  // Groups double as families: a child's parents are the adults who share a group with them
+  groups.forEach((g) => {
+    g.adults = g.members.filter((n) => !peopleByLc.get(n.toLowerCase()).child);
+    g.children = g.members.filter((n) => peopleByLc.get(n.toLowerCase()).child);
   });
-  const households = [...hhMap.values()];
-  people.forEach((p) => { p.householdInfo = p.household ? hhMap.get(p.household.toLowerCase()) : null; });
+  people.forEach((p) => {
+    p.groups = groups.filter((g) => g.members.includes(p.name)).map((g) => g.name);
+    const adults = [...new Set(groups.filter((g) => g.members.includes(p.name)).flatMap((g) => g.adults))];
+    p.parents = p.child ? adults : [];
+  });
+  const everyone = { name: 'Everyone', members: allNames, adults: [], children: [], implicit: true };
 
-  // Names usable in Who: groups first, then households (a group with the same name wins)
   const groupsByLc = new Map();
-  households.forEach((hh) => groupsByLc.set(hh.name.toLowerCase(), hh));
   groups.forEach((g) => groupsByLc.set(g.name.toLowerCase(), g));
+  groupsByLc.set('everyone', everyone);
 
   const lists = data?.lists?.columns || {};
   const cities = (data?.lists?.cities || []).map((c) => ({ name: c.name, lat: num(c.lat), lng: num(c.lng) }));
@@ -227,7 +227,7 @@ export function buildModel(data) {
   });
 
   const model = {
-    people, groups, households, cities, lists, items, issues, resolveWho, partySummary, cityCoord,
+    people, groups, everyone, cities, lists, items, issues, resolveWho, partySummary, cityCoord,
     peopleByName: new Map(people.map((p) => [p.name, p])),
     range: start ? { start, end } : null,
     itemById: new Map(items.map((i) => [i.id, i])),

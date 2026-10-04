@@ -1,16 +1,18 @@
 import './styles.css';
-import { h, icon, clear, toast } from './ui/dom.js';
+import { h, icon, clear, toast, sheet } from './ui/dom.js';
 import { state, subscribe, init, sync, setConfig } from './lib/store.js';
 import { findConflicts } from './lib/conflicts.js';
 import { activeFilterCount } from './lib/filters.js';
 import { ago, fmtJstStamp } from './lib/dates.js';
 import { ERROR_TEXT } from './lib/api.js';
 import { renderDay } from './ui/day.js';
+import { renderMonth } from './ui/month.js';
 import { renderList, renderIdeas, renderIssues, renderSettings, openFilters } from './ui/views.js';
 import { openAddMenu } from './ui/forms.js';
 
 const VIEWS = [
   ['day', 'Day', 'day'],
+  ['month', 'Month', 'month'],
   ['map', 'Map', 'map'],
   ['list', 'List', 'list'],
   ['ideas', 'Ideas', 'idea'],
@@ -24,10 +26,7 @@ const topNav = h('nav', { class: 'top-nav', 'aria-label': 'Views' });
 const bottomNav = h('nav', { class: 'bottom', 'aria-label': 'Views' });
 const title = h('h1', null, 'Japan trip');
 const header = h('header', { class: 'top' }, title, topNav, h('div', { class: 'spacer' }), syncPill, filterBtn,
-  h('a', { class: 'icon-btn', href: '#settings', 'aria-label': 'Settings', onclick: (e) => {
-    // The gear toggles: on Settings, it goes back to the view you came from
-    if (route() === 'settings' && !needsSetup()) { e.preventDefault(); location.hash = `#${lastView}`; }
-  } }, icon('gear')));
+  h('button', { class: 'icon-btn', 'aria-label': 'Settings', onclick: () => toggleSettings() }, icon('gear')));
 let lastView = 'day';
 const paneMain = h('section', { class: 'pane pane-main', 'aria-live': 'off' });
 const paneMap = h('section', { class: 'pane pane-map' });
@@ -36,6 +35,22 @@ app.append(header, h('main', null, paneMain, paneMap), bottomNav);
 document.body.append(fab);
 
 let conflicts = [];
+
+/* Settings open in a dialog over the current view; the gear (or #settings link) toggles it. */
+let settingsDlg = null;
+function toggleSettings() {
+  if (settingsDlg) { settingsDlg.close(); return; }
+  if (needsSetup()) return;
+  const body = h('div');
+  const draw = () => {
+    if (body.contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    renderSettings(body, { inDialog: true });
+  };
+  draw();
+  const unsub = subscribe(draw);
+  settingsDlg = sheet('Settings', body, { onClose: () => { unsub(); settingsDlg = null; } });
+  settingsDlg.el.classList.add('wide');
+}
 let mapModule = null;
 const isDesktop = () => matchMedia('(min-width: 1000px)').matches;
 
@@ -47,7 +62,12 @@ function route() {
     history.replaceState(null, '', location.pathname + location.search + '#day');
     return 'setup';
   }
-  const known = ['day', 'map', 'list', 'ideas', 'issues', 'settings'];
+  if (hash === 'settings') {
+    history.replaceState(null, '', `${location.pathname}${location.search}#${lastView}`);
+    if (!needsSetup()) setTimeout(() => { if (!settingsDlg) toggleSettings(); });
+    return lastView;
+  }
+  const known = ['day', 'month', 'map', 'list', 'ideas', 'issues'];
   return known.includes(hash) ? hash : 'day';
 }
 
@@ -82,28 +102,28 @@ function renderChrome(view) {
 
 function render() {
   let view = route();
-  if (view === 'setup' || (needsSetup() && view !== 'settings')) view = 'setup';
+  if (view === 'setup' || needsSetup()) view = 'setup';
+  if (view === 'setup' && settingsDlg) settingsDlg.close();
   document.body.dataset.view = view;
   if (VIEWS.some(([id]) => id === view)) lastView = view;
   conflicts = findConflicts(state.model);
   renderChrome(view);
-  fab.classList.toggle('hidden', view === 'setup' || view === 'settings' || (view === 'map' && !isDesktop()) || needsSetup());
+  fab.classList.toggle('hidden', view === 'setup' || (view === 'map' && !isDesktop()) || needsSetup());
 
   // Don't redraw a form someone is typing in
   const typing = paneMain.contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
-  const errorBanner = state.error && !['offline', 'revoked', 'bad_session'].includes(state.error.code) ? h('div', { class: 'banner error', role: 'alert' }, h('div', null, ERROR_TEXT[state.error.code] || state.error.message || 'Sync failed.', ' ', h('a', { href: '#settings' }, 'Settings'))) : null;
+  const errorBanner = state.error && !['offline', 'revoked', 'bad_session'].includes(state.error.code) ? h('div', { class: 'banner error', role: 'alert' }, h('div', null, ERROR_TEXT[state.error.code] || state.error.message || 'Sync failed.', ' ', h('button', { class: 'link', onclick: () => toggleSettings() }, 'Settings'))) : null;
 
   if (view === 'setup') {
     if (!typing) {
       renderSettings(paneMain, { firstRun: true });
       if (state.error?.code === 'revoked' || state.error?.code === 'bad_session') paneMain.prepend(h('div', { class: 'banner error', role: 'alert' }, ERROR_TEXT[state.error.code]));
     }
-  } else if (view === 'settings') {
-    if (!typing) renderSettings(paneMain);
   } else if (view !== 'map' || isDesktop()) {
     const target = view === 'map' ? 'day' : view;
     if (!typing) {
       if (target === 'day') renderDay(paneMain, conflicts);
+      if (target === 'month') renderMonth(paneMain);
       if (target === 'list') renderList(paneMain);
       if (target === 'ideas') renderIdeas(paneMain);
       if (target === 'issues') renderIssues(paneMain, conflicts);
@@ -142,9 +162,13 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
       const sw = reg.installing;
       sw?.addEventListener('statechange', () => {
         if (sw.state === 'installed' && navigator.serviceWorker.controller) {
-          const bar = h('div', { class: 'banner info', style: { position: 'fixed', left: '12px', right: '12px', top: 'calc(env(safe-area-inset-top) + 64px)', zIndex: 60, boxShadow: 'var(--shadow)' } },
-            h('div', null, 'A new version of the app is ready. ', h('button', { class: 'link', onclick: () => { sw.postMessage('skipWaiting'); } }, 'Reload')));
-          document.body.append(bar);
+          // Front and centre: a dialog, not a banner that is easy to miss
+          const dlg = sheet('New version available', h('div', null,
+            h('p', null, 'An updated version of the trip app is ready. Reload to start using it; your trip data stays on this device.'),
+            h('div', { class: 'form-actions' },
+              h('button', { class: 'btn', onclick: () => dlg.close() }, 'Later'),
+              h('button', { class: 'btn primary', onclick: () => { sw.postMessage('skipWaiting'); } }, 'Reload now'))));
+          dlg.el.classList.add('center');
         }
       });
     });

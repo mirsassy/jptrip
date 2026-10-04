@@ -74,14 +74,20 @@ describe('model', () => {
   });
 });
 
-describe('households', () => {
-  it('reads households from the People tab, with ages from the Notes', () => {
+describe('groups and families', () => {
+  it('reads groups from the Groups tab; a child’s parents are the adults in their groups', () => {
     const m = setup();
-    expect(m.households.map((h) => [h.name, h.adults, h.children])).toEqual([
+    expect(m.groups.map((g) => [g.name, g.adults, g.children])).toEqual([
       ['Avery family', ['Avery', 'Blake'], ['Kit', 'Robin']],
       ['Casey and Drew', ['Casey', 'Drew'], []],
     ]);
-    expect(m.peopleByName.get('Kit')).toMatchObject({ child: true, age: 7, household: 'Avery family' });
+    expect(m.peopleByName.get('Kit')).toMatchObject({ child: true, age: 7, groups: ['Avery family'], parents: ['Avery', 'Blake'] });
+  });
+
+  it('"Everyone" is always the whole People tab, whatever the Groups row lists', () => {
+    const m = setup([['Groups', { Group: 'Everyone', Members: 'Avery' }]]);
+    expect(m.resolveWho('Everyone').people).toHaveLength(9);
+    expect(m.groups.some((g) => g.name === 'Everyone')).toBe(false);
   });
 
   it('a household name in Who means everyone in it; "&" and "and" still separate people', () => {
@@ -141,7 +147,7 @@ describe('filters', () => {
     expect(ids({ statuses: ['Cancelled'] })).toEqual(['R-c']);
     expect(ids({ people: ['Avery'], types: ['reservation'] })).toEqual([]);
     expect(ids({ people: ['Robin'], types: ['reservation'] })).toEqual(['R-d']);
-    expect(selectedPeople(m, { ...DEFAULT_FILTERS, groups: ['Everyone'] })).toHaveLength(9);
+    expect(selectedPeople(m, { ...DEFAULT_FILTERS, groups: ['Avery family'] })).toHaveLength(4);
     expect(ids({ cities: ['Sendai'], types: ['stay'] })).toHaveLength(1);
     expect(ids({ from: '2030-03-19', to: '2030-03-19', types: ['stay'] })).toHaveLength(1);
   });

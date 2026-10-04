@@ -40,6 +40,7 @@ const ICONS = {
   checkin: 'M10 4H5v16h5M14 8l4 4-4 4M18 12H8',
   staying: 'M3 20V9l9-5 9 5v11h-6v-6H9v6z',
   day: 'M7 2v2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2zM5 9h14v10H5z',
+  month: 'M7 2v2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2zM5 9h4v3H5zm5 0h4v3h-4zm5 0h4v3h-4zM5 13h4v3H5zm5 0h4v3h-4zm5 0h4v3h-4z',
   map: 'M9 3 3 5.5v15L9 18l6 3 6-2.5v-15L15 6 9 3zm0 2.2 6 3v10.6l-6-3z',
   list: 'M4 6h2v2H4zm4 0h12v2H8zm-4 5h2v2H4zm4 0h12v2H8zm-4 5h2v2H4zm4 0h12v2H8z',
   issues: 'M12 2 1 21h22zm-1 7h2v6h-2zm0 8h2v2h-2z',

@@ -13,9 +13,8 @@ Open decisions and things that could not be verified while building the app. Iti
 
 ## Design decisions to revisit
 
-- [ ] **Households are empty in the real Sheet.** The People tab's new Household column needs filling in (who belongs with whom, and which adults are each child's parents).
-- [ ] **Household names in Who include children.** "Saito family" in Who means both parents and the children. Avoid naming a household "Ken & Yumi", which reads like two adults.
-- [ ] **One household per person.** Grandparents travelling with a family are their own household (or none); the "without a parent" check only looks at the child's own household.
+- [ ] **Groups replace households.** Families now live in the Groups tab (moved there: Mirstavrev, Mirsaidi, Khaleghi, Rakane). The People tab's Household column is no longer used and can be deleted. A child's parents are the adults who share any group with them.
+- [ ] **Unknown names in Groups.** "Niloofar & Farbod", "Mom" and "Tony & Vahaub" list people not in the People tab (or no one): confirm who they are.
 - [ ] **Children's ages** come from the People tab Notes ("Age 7").
 - [ ] **Party size fills in from Who** only when left blank; a different number is kept and flagged under Issues.
 

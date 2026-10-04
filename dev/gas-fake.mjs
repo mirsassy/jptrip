@@ -138,13 +138,14 @@ export function seedTabs(tz = 'America/Los_Angeles') {
   return {
     'How to use': [['How this workbook works']],
     People: [
-      ['Name', 'Adult or child', 'Group', 'Color (hex)', 'Notes', 'Household'],
-      ['Avery', 'Adult', '', '#1F77B4', '', 'Avery family'], ['Blake', 'Adult', '', '#FF7F0E', '', 'Avery family'],
-      ['Casey', 'Adult', '', '#2CA02C', '', 'Casey and Drew'], ['Drew', 'Adult', '', '#D62728', '', 'Casey and Drew'],
+      ['Name', 'Adult or child', 'Group', 'Color (hex)', 'Notes'],
+      ['Avery', 'Adult', '', '#1F77B4'], ['Blake', 'Adult', '', '#FF7F0E'],
+      ['Casey', 'Adult', '', '#2CA02C'], ['Drew', 'Adult', '', '#D62728'],
       ['Emery', 'Adult', '', '#9467BD'], ['Frankie', 'Adult', '', '#8C564B'], ['Gale', 'Adult', '', '#E377C2'],
-      ['Kit', 'Child', '', '#17BECF', 'Age 7', 'Avery family'], ['Robin', 'Child', '', '#BCBD22', 'Age 3', 'Avery family'],
+      ['Kit', 'Child', '', '#17BECF', 'Age 7'], ['Robin', 'Child', '', '#BCBD22', 'Age 3'],
     ],
-    Groups: [['Group', 'Members', 'Notes'], ['Everyone', 'Avery, Blake, Casey, Drew, Emery, Frankie, Gale, Kit, Robin', 'Whole family']],
+    Groups: [['Group', 'Members', 'Notes'], ['Everyone', 'Avery, Blake, Casey, Drew, Emery, Frankie, Gale, Kit, Robin', 'Whole family'],
+      ['Avery family', 'Avery, Blake, Kit, Robin', 'Parents and children'], ['Casey and Drew', 'Casey, Drew', '']],
     Stays: [
       ['Check-in', 'Check-out', 'City', 'Hotel', 'Address', 'Who', 'Status', 'Notes', 'Confirmation #', 'ID', 'Lat', 'Lng', 'Last edited by', 'Attachment'],
       [d(3, 4), d(3, 5), 'Sapporo', '', '', 'Everyone', 'Tentative'],

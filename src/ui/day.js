@@ -3,7 +3,7 @@ import { state, setDate } from '../lib/store.js';
 import { dayGroups, tripDays, whereabouts } from '../lib/model.js';
 import { makePass, selectedPeople } from '../lib/filters.js';
 import { addDays, fmtDay, jpNow } from '../lib/dates.js';
-import { whoChips, statusBadge, weatherChip, mapLinks, itemTimeLabel, personChip } from './common.js';
+import { whoChips, statusBadge, weatherChip, googleMapsLink, itemTimeLabel, personChip } from './common.js';
 import { openEditor } from './forms.js';
 import { openAttachment } from './import.js';
 
@@ -89,27 +89,21 @@ function timelineRow(e, g, flaggedIds) {
   if (e.kind === 'checkout') title = `Check out: ${it.title}`;
   if (e.kind === 'checkin') title = `Check in: ${it.title}`;
   if (e.kind === 'staying') title = `Staying: ${it.title}`;
-  const others = it.people.filter((p) => !g.people.includes(p));
-  const partial = g.people.filter((p) => it.people.includes(p));
-  const meta = [];
+  // Shown per item: its type, where, who, and a Google Maps link. Notes and booking details are in the item's form.
+  const TYPE = { stay: 'Stay', transport: it.mode || 'Transport', reservation: it.kind || 'Reservation', note: 'Note' };
+  const where = it.type === 'transport' ? '' : it.type === 'stay' ? (it.address || it.city) : [it.address || '', it.city].filter(Boolean).join(', ');
+  const meta = [h('span', { class: 'type-tag' }, TYPE[it.type] || it.type)];
   if (it.status && it.status !== 'Confirmed') meta.push(statusBadge(it.status));
-  if (it.type === 'transport' && it.carrier) meta.push(h('span', null, it.carrier));
-  if (it.type === 'reservation' && it.kind) meta.push(h('span', null, it.kind));
-  if (it.type === 'reservation' || it.type === 'transport') meta.push(h('span', null, state.model.partySummary(it.people) + (it.partySize ? ` · booked for ${it.partySize}` : '')));
-  if (it.city && it.type !== 'stay') meta.push(h('span', null, it.city));
-  if (it.raw['Confirmation #']) meta.push(h('span', null, `Conf. ${it.raw['Confirmation #']}`));
-  if (it.raw.Seats) meta.push(h('span', null, `Seats ${it.raw.Seats}`));
+  if (where) meta.push(h('span', null, where));
+  if (it.type !== 'note' || it.who) meta.push(whoChips(it.people));
   if (it.raw.Attachment && e.kind !== 'staying') meta.push(h('button', { class: 'link', onclick: () => openAttachment(it.raw.Attachment) }, icon('clip', 14), ' File'));
-  if (partial.length < g.people.length) meta.push(h('span', null, 'Only: ', whoChips(partial)));
-  if (others.length) meta.push(h('span', null, `With ${others.join(', ')}`));
   if (it.raw._pending) meta.push(h('span', { class: 'pending-tag' }, 'Not synced yet'));
-  const notes = it.raw.Notes && it.type !== 'note' ? h('div', { class: 'meta' }, it.raw.Notes) : null;
-  const links = it.type === 'transport' ? null : mapLinks(it);
+  const links = e.kind === 'staying' ? null : googleMapsLink(it);
   return h('li', { class: [it.status === 'Cancelled' ? 'cancelled' : '', flaggedIds.has(it.id) ? 'flagged' : ''].join(' ') },
     h('span', { class: 't' }, time),
     h('span', { class: 'ic' }, icon(e.kind === 'checkout' || e.kind === 'checkin' || e.kind === 'staying' ? e.kind : it.type)),
-    h('div', null, h('div', { class: 'ttl' }, title), meta.length ? h('div', { class: 'meta' }, meta) : null, notes,
-      e.kind !== 'staying' && links ? h('div', { class: 'meta', style: { marginTop: '6px' } }, links) : null),
+    h('div', null, h('div', { class: 'ttl' }, title), meta.length ? h('div', { class: 'meta' }, meta) : null,
+      links ? h('div', { class: 'meta', style: { marginTop: '6px' } }, links) : null),
     h('button', { class: 'icon-btn', 'aria-label': `Edit ${it.title}`, onclick: () => openEditor(it.tab, it.raw) }, icon('edit', 18)));
 }
 

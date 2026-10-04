@@ -52,7 +52,7 @@ function fieldsFor(tab) {
     case 'Notes': return [F('Date', 'date', { half: true }), F('City', 'city', { half: true }), F('Who', 'who'), F('Note', 'textarea', { req: true })];
     case 'People': return [
       F('Name', 'text', { req: true }), F('Adult or child', 'select', { opts: () => ['Adult', 'Child'] }),
-      F('Household', 'household'), F('Color (hex)', 'color'), F('Group', 'text'),
+      F('Color (hex)', 'color'),
       F('Notes', 'textarea', { hint: 'for a child, e.g. "Age 7"' }),
     ];
     case 'Groups': return [F('Group', 'text', { req: true }), F('Members', 'who', { peopleOnly: true, req: true }), F('Notes', 'textarea')];
@@ -169,7 +169,7 @@ function collect(form, fields, values) {
 function fieldEl(f, values, pendingCities, tab) {
   const label = f.label || (f.type === 'location' ? 'Map location' : f.col);
   // Fields with several controls use a div: a <label> would forward taps on it to the first button inside.
-  const multi = ['who', 'location', 'datetime', 'city', 'place', 'household', 'attachment'].includes(f.type);
+  const multi = ['who', 'location', 'datetime', 'city', 'place', 'attachment'].includes(f.type);
   const wrap = h(multi ? 'div' : 'label', { class: 'field', dataset: { col: f.col }, role: multi ? 'group' : null, 'aria-label': multi ? label : null }, h('span', null, label, f.req ? ' *' : '', f.hint ? h('span', { class: 'hint' }, ` (${f.hint})`) : null));
   const v = values[f.col] ?? '';
   const name = f.col;
@@ -246,19 +246,6 @@ function fieldEl(f, values, pendingCities, tab) {
       };
       break;
     }
-    case 'household': {
-      // One household per person: parents and their children. Name it like "Saito family":
-      // a household name in a Who column means everyone in it, children included.
-      const names = state.model.households.map((x) => x.name);
-      const sel = h('select', { name }, h('option', { value: '' }, 'Not in a household'), names.map((n) => h('option', { value: n }, n)), h('option', { value: '__new' }, 'New household…'));
-      const other = h('input', { type: 'text', placeholder: 'e.g. Saito family', class: 'hidden', style: { marginTop: '6px' } });
-      if (v && !names.includes(String(v))) { sel.append(h('option', { value: v }, v)); }
-      sel.value = String(v);
-      sel.addEventListener('change', () => { other.classList.toggle('hidden', sel.value !== '__new'); if (sel.value === '__new') other.focus(); });
-      input = h('div', null, sel, other, h('div', { class: 'small muted', style: { marginTop: '4px' } }, 'Parents and their children share a household. Using its name in Who includes everyone in it.'));
-      wrap._get = () => ({ [f.col]: sel.value === '__new' ? other.value.trim() : sel.value });
-      break;
-    }
     case 'who': {
       input = whoPicker(String(v), f.peopleOnly);
       wrap._get = () => ({ [f.col]: input._value() });
@@ -290,13 +277,13 @@ function whoPicker(current, peopleOnly) {
   const sel = new Set(current.trim() ? res.people : []);
   const unknown = res.unknown;
   const peopleRow = h('div', { class: 'toggle-chips', role: 'group', 'aria-label': 'People' });
-  const groupRow = h('div', { class: 'toggle-chips', role: 'group', 'aria-label': 'Groups and families', style: { marginBottom: '8px' } });
+  const groupRow = h('div', { class: 'toggle-chips', role: 'group', 'aria-label': 'Groups', style: { marginBottom: '8px' } });
   const summary = h('div', { class: 'small muted', style: { marginTop: '6px' }, 'aria-live': 'polite' });
   const draw = () => {
     peopleRow.replaceChildren(...m.people.map((p) => h('button', { type: 'button', 'aria-pressed': String(sel.has(p.name)), onclick: () => { sel.has(p.name) ? sel.delete(p.name) : sel.add(p.name); draw(); } },
       h('span', { class: 'sw', style: { background: p.color } }), p.name, p.child ? h('span', { class: 'muted small' }, p.age !== null ? ` (${p.age})` : ' (child)') : null)));
     if (!peopleOnly) {
-      groupRow.replaceChildren(...[...m.groups, ...m.households].map((g) => {
+      groupRow.replaceChildren(...[m.everyone, ...m.groups].map((g) => {
         const on = g.members.length && g.members.every((x) => sel.has(x));
         return h('button', { type: 'button', 'aria-pressed': String(on), onclick: () => { if (on) g.members.forEach((x) => sel.delete(x)); else g.members.forEach((x) => sel.add(x)); draw(); } }, g.name);
       }));
@@ -308,11 +295,13 @@ function whoPicker(current, peopleOnly) {
     unknown.length ? h('div', { class: 'err' }, `Not recognized (kept as typed): ${unknown.join(', ')}`) : null);
   box._value = () => {
     const names = m.people.map((p) => p.name).filter((n) => sel.has(n));
+    // "Everyone" only when every person in the People tab is picked
+    if (!peopleOnly && names.length && names.length === m.people.length) return ['Everyone', ...unknown].join(', ');
     // Unchanged selection: keep the original text (e.g. a group name)
     const same = current.trim() && names.length === res.people.length && names.every((n) => res.people.includes(n)) && !unknown.length;
     if (same) return current;
     if (!peopleOnly) {
-      const g = [...m.groups, ...m.households].find((x) => x.members.length === names.length && x.members.every((n) => sel.has(n)));
+      const g = m.groups.find((x) => x.members.length === names.length && x.members.every((n) => sel.has(n)));
       if (g && names.length) return [g.name, ...unknown].join(', ');
     }
     return [...names, ...unknown].join(', ');
@@ -353,10 +342,10 @@ function locationField(values, f) {
 
 /** Restaurant idea -> reservation: asks for the booking details. */
 export function openMoveIdea(idea) {
-  const vals = { Date: state.date || '', Time: '', Who: 'Everyone' };
+  const vals = { Date: state.date || '', Time: '', Who: '' };
   const fields = [
     { col: 'Date', type: 'date', req: true, half: true }, { col: 'Time', type: 'time', half: true },
-    { col: 'Who', type: 'who' }, { col: 'Party size', type: 'number', half: true },
+    { col: 'Who', type: 'who', req: true }, { col: 'Party size', type: 'number', half: true },
     { col: 'Status', type: 'select', opts: statusOpts, half: true },
     { col: 'Cancellation deadline', type: 'datetime' }, { col: 'Confirmation #', type: 'text' },
   ];
@@ -372,6 +361,9 @@ export function openMoveIdea(idea) {
     e.preventDefault();
     const v = collect(form, fields, vals);
     if (!v.Date) { toast('Pick a date.'); return; }
+    const whoEl = form.querySelector('[data-col="Who"]');
+    whoEl.querySelector('.err')?.remove();
+    if (!String(v.Who || '').trim()) { whoEl.append(h('div', { class: 'err' }, 'Pick who is going')); return; }
     const reservation = { ID: newId('R') };
     Object.entries(v).forEach(([k, x]) => { if (x !== '') reservation[k] = x; });
     await enqueue('moveIdea', { ideaId: idea.ID, reservation });

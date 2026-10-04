@@ -238,6 +238,9 @@ test('restaurant ideas: kid-friendly filter and one-tap move to Reservations', a
   await dlg.locator('input[name=Date]').fill('2030-03-04');
   await dlg.locator('input[name=Time]').fill('12:00');
   await dlg.getByRole('button', { name: 'Move to Reservations' }).click();
+  await expect(dlg).toContainText('Pick who is going');
+  await dlg.getByRole('group', { name: 'Groups' }).getByRole('button', { name: 'Everyone' }).click();
+  await dlg.getByRole('button', { name: 'Move to Reservations' }).click();
   await expect.poll(async () => (await sheetRows('Reservations')).find((r) => r.Name === 'Ramen alley')).toMatchObject({ Date: '2030-03-04', Time: '12:00', City: 'Sapporo', 'Kid-friendly': 'Yes', Type: 'Restaurant', Who: 'Everyone' });
   await expect.poll(async () => (await sheetRows('Restaurant ideas')).find((r) => r.ID === 'I-1')?.Status).toBe('Confirmed');
 });
@@ -382,30 +385,31 @@ test('security policy: the app cannot send data to other sites', async ({ page, 
   expect(img).toBe('blocked');
 });
 
-test('families: households in Settings, Who chips, party summary, and child checks', async ({ page, context }) => {
+test('groups: in the Settings dialog, Who chips, party summary, and child checks', async ({ page, context }) => {
   await open(page, context, { hash: '#settings' });
-  const fam = page.locator('#families');
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  const fam = settings.locator('#families');
   await expect(fam).toContainText('Avery family');
   await expect(fam).toContainText('2 adults, 2 children (7, 3)');
   await expect(fam).toContainText('Children: Kit (7), Robin (3)');
-  await expect(fam).toContainText('Not in a household:');
+  await expect(fam).toContainText('Not in a group:');
 
-  // Put Gale in the Casey and Drew household from the app
-  await fam.getByRole('button', { name: 'Edit Gale' }).click();
-  const person = page.getByRole('dialog', { name: 'Edit person' });
-  await person.getByRole('group', { name: 'Household' }).getByRole('combobox').selectOption('Casey and Drew');
-  await person.getByRole('button', { name: 'Save' }).click();
-  await expect.poll(async () => (await sheetRows('People')).find((r) => r.Name === 'Gale').Household).toBe('Casey and Drew');
+  // Add Gale to the Casey and Drew group from the app
+  await fam.getByRole('button', { name: 'Edit Casey and Drew' }).click();
+  const grp = page.getByRole('dialog', { name: 'Edit group' });
+  await grp.getByRole('button', { name: 'Gale', exact: true }).click();
+  await grp.getByRole('button', { name: 'Save' }).click();
+  await expect.poll(async () => (await sheetRows('Groups')).find((r) => r.Group === 'Casey and Drew').Members).toBe('Casey, Drew, Gale');
+  await settings.getByRole('button', { name: 'Close' }).first().click();
 
-  // Booking for a household: chip selects parents and children; party size fills itself in
-  await page.locator('nav a[href="#day"]:visible').click();
+  // Booking for a group: chip selects parents and children; party size fills itself in
   await page.getByRole('button', { name: 'Add to the trip' }).click();
   await page.getByRole('button', { name: 'Reservation', exact: true }).click();
   const dlg = page.getByRole('dialog', { name: 'Add reservation' });
   await dlg.locator('input[name=Date]').fill('2030-03-06');
   await dlg.locator('input[name=Time]').fill('10:00');
   await dlg.locator('input[name=Name]').fill('Kids museum');
-  await dlg.getByRole('group', { name: 'Groups and families' }).getByRole('button', { name: 'Avery family' }).click();
+  await dlg.getByRole('group', { name: 'Groups' }).getByRole('button', { name: 'Avery family' }).click();
   await expect(dlg.getByText('2 adults, 2 children (7, 3)')).toBeVisible();
   await dlg.getByRole('button', { name: 'Add', exact: true }).click();
   await expect.poll(async () => (await sheetRows('Reservations')).find((r) => r.Name === 'Kids museum')).toMatchObject({ Who: 'Avery family', 'Party size': 4 });
@@ -453,7 +457,7 @@ test('import pasted text: each booking opens pre-filled, and Who must be chosen'
   await tr.getByRole('button', { name: 'Drew', exact: true }).click();
   await tr.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(tr.locator('[data-col=Who] .err')).toHaveText('Pick who is going');
-  await tr.getByRole('group', { name: 'Groups and families' }).getByRole('button', { name: 'Casey and Drew' }).click();
+  await tr.getByRole('group', { name: 'Groups' }).getByRole('button', { name: 'Casey and Drew' }).click();
   await tr.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(found.locator('[data-import-tab=Transport]')).toContainText('✓ Added');
   await found.getByRole('button', { name: 'Done' }).click();
@@ -518,12 +522,37 @@ test('import: clear messages when reading is off, or nothing is found', async ({
   await expect(page.getByRole('dialog', { name: 'Bookings found' })).toContainText('No bookings were found');
 });
 
-test('the gear opens Settings and, tapped again, goes back', async ({ page, context }) => {
+test('the gear opens Settings in a dialog over the current view, and closes it again', async ({ page, context }) => {
   await open(page, context, { hash: '#list' });
-  await page.getByRole('link', { name: 'Settings' }).click();
-  await expect(page).toHaveURL(/#settings$/);
-  await page.getByRole('link', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
   await expect(page).toHaveURL(/#list$/);
+  await page.getByRole('button', { name: 'Settings' }).click({ force: true });
+  await expect(page.getByRole('dialog', { name: 'Settings' })).toBeHidden();
+});
+
+test('month view: each night shows the city and who is there; tapping a day opens it', async ({ page, context }) => {
+  await open(page, context, { hash: '#month' });
+  await expect(page.getByRole('heading', { name: 'March 2030' })).toBeVisible();
+  const cell = page.getByRole('button', { name: 'Mar 7', exact: true });
+  await expect(cell).toContainText('Otaru');
+  await expect(cell).toContainText('All');
+  await expect(page.getByRole('heading', { name: 'Where everyone stays' })).toBeVisible();
+  await cell.click();
+  await expect(page).toHaveURL(/#day$/);
+  await expect(page.getByText('Thu, Mar 7', { exact: true }).first()).toBeVisible();
+});
+
+test('day view items show type, place, people and a Google Maps link, not notes', async ({ page, context }) => {
+  await api({ action: 'upsert', tab: 'Reservations', values: { ID: 'R-1', Notes: 'Secret note text' } });
+  await open(page, context);
+  await page.getByRole('button', { name: /Mar 8/ }).first().click();
+  const row = page.locator('li', { hasText: 'Seafood dinner' });
+  await expect(row).toContainText('Restaurant');
+  await expect(row).toContainText('Hakodate');
+  await expect(row).not.toContainText('Secret note text');
+  await expect(row.getByRole('link', { name: /Google Maps/ })).toHaveAttribute('href', /google\.com\/maps/);
+  await expect(row.getByRole('link', { name: /Apple Maps/ })).toHaveCount(0);
 });
 
 test('a change made directly in the Sheet shows up after sync', async ({ page, context }) => {

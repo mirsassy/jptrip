@@ -26,6 +26,7 @@ After 5 wrong PINs in a row the app waits 15 minutes before you can try again; a
 
 ## Find your way around
 
+- **Month**: the whole trip on a calendar: where people sleep each night and who is there. Tap a day to open it.
 - **Day**: pick a date. Each card is a group sleeping in the same place that night, with times, bookings, notes and the weather. **By person** shows one card per person.
 - **Map**: where everyone is on the chosen day. Drag the slider to change days. Tap a pin for details and **Google Maps** / **Apple Maps** buttons.
 - **List**: every plan, by date.
@@ -39,7 +40,7 @@ Weather marked **Forecast** comes from a real forecast (up to about 2 weeks ahea
 
 ## Families
 
-Parents and their children form a **household** (see **Settings → Families**). Children don't sign in: parents add and change plans for them. Tap a family's name in **Who** to include everyone in it; reservations then show "2 adults, 2 children (7, 3)" and fill in the party size for you. **Issues** warns if a child is booked without a parent or with no adult at all.
+Families are **groups** (see **Settings → Groups**). Children don't sign in: parents add and change plans for them. Tap a group's name in **Who** to include everyone in it, or **Everyone** for the whole family; reservations then show "2 adults, 2 children (7, 3)" and fill in the party size for you. **Issues** warns if a child is booked without a parent or with no adult at all.
 
 ## Add or change something
 

@@ -135,7 +135,7 @@ export function findConflicts(model, nowMs = Date.now()) {
     }
   });
 
-  // 5. Children without a parent (an adult from their household), or without any adult
+  // 5. Children without a parent (an adult who shares a group with them), or without any adult
   const byName = new Map(model.people.map((p) => [p.name, p]));
   dated.filter((it) => it.type === 'stay' || it.type === 'transport' || it.type === 'reservation').forEach((it) => {
     const kids = it.people.map((n) => byName.get(n)).filter((p) => p && p.child);
@@ -150,12 +150,12 @@ export function findConflicts(model, nowMs = Date.now()) {
       });
       return;
     }
-    const noParent = kids.filter((k) => k.householdInfo && k.householdInfo.adults.length && !k.householdInfo.adults.some((a) => it.people.includes(a)));
+    const noParent = kids.filter((k) => k.parents.length && !k.parents.some((a) => it.people.includes(a)));
     if (noParent.length) {
       out.push({
         kind: 'child-no-parent', severity: 'warn', date: it.date, people: noParent.map((k) => k.name), itemIds: [it.id],
         title: 'Child without a parent',
-        message: `“${it.title}” (${when}): ${noParent.map((k) => `${k.name} is there without ${k.householdInfo.adults.join(' or ')}`).join('; ')}.`,
+        message: `“${it.title}” (${when}): ${noParent.map((k) => `${k.name} is there without ${k.parents.join(' or ')}`).join('; ')}.`,
       });
     }
   });

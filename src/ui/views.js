@@ -138,7 +138,7 @@ export function openFilters() {
   const body = h('div', null,
     h('p', { class: 'muted small', style: { marginTop: 0 } }, 'Filters apply to every view and are remembered on this device. Nothing selected means “all”.'),
     toggles('People', m.people.map((p) => p.name), 'people', personLabel),
-    toggles('Groups and families', [...m.groups, ...m.households].map((g) => g.name), 'groups'),
+    toggles('Groups', m.groups.map((g) => g.name), 'groups'),
     toggles('Cities', m.cities.map((c) => c.name), 'cities'),
     toggles('Type', TYPES, 'types', (t) => TYPE_LABELS[t]),
     toggles('Status', STATUSES, 'statuses'),
@@ -155,11 +155,11 @@ export function openFilters() {
 }
 
 /* ---------------- Settings / sign-in ---------------- */
-export function renderSettings(root, { firstRun = false } = {}) {
+export function renderSettings(root, { firstRun = false, inDialog = false } = {}) {
   if (firstRun) { renderSignIn(root); return; }
   clear(root);
   root.append(
-    h('h2', { style: { margin: '4px 0 8px', fontSize: '1.15rem' } }, 'Settings'),
+    inDialog ? null : h('h2', { style: { margin: '4px 0 8px', fontSize: '1.15rem' } }, 'Settings'),
     ...settingsCards().filter(Boolean),
     h('div', { class: 'card' },
       h('h3', { style: { marginTop: 0 } }, 'Offline maps'),
