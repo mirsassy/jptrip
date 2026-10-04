@@ -11,6 +11,9 @@
  * owner can create it); the administrator adds and removes everyone else from
  * the app. PINs and tokens are stored only as SHA-256 hashes in Script Properties.
  *
+ * Permissions (appsscript.json): this spreadsheet only; Drive files the script itself
+ * creates (uploads), never the rest of the Drive; outside requests (Claude, short map links).
+ *
  * @OnlyCurrentDoc  Limits this script to the spreadsheet it is attached to.
  */
 
@@ -55,6 +58,15 @@ var DISABLE_AFTER = 10;
 var WRONG_PIN_DELAY_MS = 1500;
 var MAX_SESSIONS = 5;          // per person (phones/browsers signed in at once)
 var SESSION_IDLE_DAYS = 30;    // a phone unused this long must sign in again
+
+// Reading bookings with Claude (optional; needs an Anthropic API key set from the Sheet menu).
+// The key stays in Script Properties: it is never sent to the app.
+var CLAUDE_MODEL = 'claude-opus-5-5';
+var CLAUDE_DAILY_LIMIT = 40;              // documents read per person per day
+var UPLOAD_MAX_BYTES = 8 * 1024 * 1024;   // largest file the app may upload
+var TEXT_MAX_CHARS = 100000;              // longest pasted text
+var UPLOAD_FOLDER_NAME = 'Trip app uploads';
+var CLAUDE_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
 /* ------------------------------------------------------------------ */
 /* Web app entry points                                                */
@@ -104,6 +116,12 @@ function doPost(e) {
         }));
       case 'resolveLocation':
         return json_({ ok: true, location: resolveLocation_(String(req.text || '')) });
+      case 'extract':
+        return json_(extract_(req, me));
+      case 'attachment':
+        return json_(getAttachment_(String(req.id || '')));
+      case 'discardUpload':
+        return json_(discardUpload_(String(req.id || ''), me));
       case 'changePin':
         return json_(withLock_(function () { return changePin_(me.email, req.currentPin, req.newPin, auth.tokenHash); }));
       case 'logout':
@@ -626,6 +644,225 @@ function addListValue_(column, value, extra) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Reading bookings with Claude, and keeping uploaded files            */
+/* ------------------------------------------------------------------ */
+
+// One flat row shape for every kind of booking; the app maps it onto the right tab.
+// Structured outputs need every property listed in "required" and no extra properties.
+var EXTRACT_FIELDS = {
+  kind: { type: 'string', enum: ['stay', 'transport', 'reservation', 'note'], description: 'stay = hotel/ryokan/apartment; transport = flight, train, bus, ferry, car or transfer (one item per leg); reservation = restaurant, activity, tour, ticket, onsen; note = anything else worth keeping' },
+  status: { type: 'string', enum: ['Confirmed', 'Tentative'], description: 'Confirmed if the document is a booking confirmation, Tentative for a quote, hold, wishlist or plan' },
+  name: { type: 'string', description: 'Hotel, restaurant, activity or tour name. For transport: carrier and flight/train number, e.g. "JAL 6" or "Nozomi 21"' },
+  date: { type: 'string', description: 'YYYY-MM-DD. Check-in date for a stay, departure date for transport, date of a reservation or note' },
+  end_date: { type: 'string', description: 'YYYY-MM-DD check-out date for a stay; otherwise empty' },
+  time: { type: 'string', description: 'HH:MM 24-hour Japan time: departure for transport, start time for a reservation; otherwise empty' },
+  end_time: { type: 'string', description: 'HH:MM 24-hour Japan time of arrival for transport; otherwise empty' },
+  city: { type: 'string', description: 'City in Japan where it happens (for a stay or reservation). Use a name from the known cities when it matches' },
+  address: { type: 'string', description: 'Street address, if given' },
+  from: { type: 'string', description: 'Transport only: departure city, station or airport' },
+  to: { type: 'string', description: 'Transport only: arrival city, station or airport' },
+  mode: { type: 'string', description: 'Transport only: Flight, Shinkansen, train, bus, ferry, car, taxi... Use a known mode when one matches' },
+  reservation_type: { type: 'string', description: 'Reservation only: Restaurant, Activity, Tour... Use a known type when one matches' },
+  seats: { type: 'string', description: 'Seat or car numbers, if given' },
+  confirmation: { type: 'string', description: 'Confirmation, booking or reservation number' },
+  party_size: { type: 'string', description: 'Number of people as digits, if stated; otherwise empty' },
+  guests: { type: 'array', items: { type: 'string' }, description: 'Names of the travellers or guests exactly as written in the document' },
+  cancellation_deadline: { type: 'string', description: 'YYYY-MM-DD HH:MM Japan time after which cancelling costs money, if stated' },
+  link: { type: 'string', description: 'A booking or venue web address from the document, if any' },
+  notes: { type: 'string', description: 'Short useful details that fit nowhere else: room type, meal plan, check-in time, baggage, payment due, the original time zone of converted times. Never card numbers or passport numbers' }
+};
+var EXTRACT_SCHEMA = {
+  type: 'object',
+  properties: {
+    items: { type: 'array', items: { type: 'object', properties: EXTRACT_FIELDS, required: Object.keys(EXTRACT_FIELDS), additionalProperties: false } },
+    warnings: { type: 'array', items: { type: 'string' }, description: 'Things the family should double-check, e.g. an unclear year or time zone' }
+  },
+  required: ['items', 'warnings'],
+  additionalProperties: false
+};
+
+/** Reads pasted text and/or an uploaded file with Claude and returns rows for the app to review. */
+function extract_(req, me) {
+  var key = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
+  if (!key) return { ok: false, error: 'ai_not_set' };
+  var text = String(req.text || '').slice(0, TEXT_MAX_CHARS);
+  var file = req.file && req.file.data ? { name: String(req.file.name || 'upload').slice(0, 120), mimeType: String(req.file.mimeType || ''), data: String(req.file.data) } : null;
+  if (!text.trim() && !file) return { ok: false, error: 'nothing_to_read' };
+  var bytes = null;
+  if (file) {
+    try { bytes = Utilities.base64Decode(file.data); } catch (err) { return { ok: false, error: 'bad_request' }; }
+    if (bytes.length > UPLOAD_MAX_BYTES) return { ok: false, error: 'file_too_big' };
+  }
+  var readable = file && CLAUDE_FILE_TYPES.indexOf(file.mimeType) >= 0;
+  if (file && !readable && !text.trim()) return { ok: false, error: 'file_type' };
+
+  // A daily allowance per person keeps the API bill predictable
+  var cache = CacheService.getScriptCache();
+  var countKey = 'ai:' + me.email + ':' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  var used = Number(cache.get(countKey) || 0);
+  if (used >= CLAUDE_DAILY_LIMIT) return { ok: false, error: 'ai_limit' };
+  cache.put(countKey, String(used + 1), 86400);
+
+  var res = callClaude_(key, text, readable ? file : null, req.hints || {});
+  if (res.error) return { ok: false, error: res.error, message: res.message };
+  var out = { ok: true, items: res.items, warnings: res.warnings };
+  if (file && req.keep) {
+    try {
+      out.attachment = saveUpload_(file, bytes, me);
+    } catch (err) {
+      out.warnings.push('The file could not be kept in Drive (' + String(err.message || err).slice(0, 120) + '). The bookings can still be added.');
+    }
+  }
+  return out;
+}
+
+function extractPrompt_(text, hasFile, hints) {
+  var list = function (a) { return (Array.isArray(a) ? a : []).map(function (x) { return String(x).slice(0, 60); }).slice(0, 80).join(', '); };
+  var lines = [
+    'You read travel documents for a family trip to Japan and turn every booking or plan in them into rows for the family trip planner.',
+    '',
+    'Rules:',
+    '- One item per booking. A flight or train journey with several legs is one transport item per leg. A return trip is two items.',
+    '- Dates are YYYY-MM-DD. Times are HH:MM, 24-hour, in Japan time. If a time is printed in another time zone (e.g. a departure from abroad), convert it to Japan time and give the original in notes.',
+    '- Leave a field as an empty string when the document does not say. Do not guess confirmation numbers, prices or names.',
+    '- Never copy payment card numbers, passport numbers or passwords into any field.',
+    '- If nothing in the input is a booking or a plan, return no items and say so in warnings.'
+  ];
+  if (hints.start && hints.end) lines.push('- The trip runs from ' + String(hints.start).slice(0, 10) + ' to ' + String(hints.end).slice(0, 10) + '. Dates written without a year are in that range; mention it in warnings if one is outside it.');
+  if (list(hints.cities)) lines.push('- Known cities: ' + list(hints.cities) + '.');
+  if (list(hints.modes)) lines.push('- Known transport modes: ' + list(hints.modes) + '.');
+  if (list(hints.types)) lines.push('- Known reservation types: ' + list(hints.types) + '.');
+  lines.push('');
+  lines.push(hasFile ? 'The attached document is the booking.' + (text.trim() ? ' The person also pasted this text:' : '') : 'The person pasted this text:');
+  if (text.trim()) lines.push('<pasted_text>\n' + text + '\n</pasted_text>');
+  return lines.join('\n');
+}
+
+function callClaude_(key, text, file, hints) {
+  var content = [];
+  if (file) {
+    content.push({ type: file.mimeType === 'application/pdf' ? 'document' : 'image', source: { type: 'base64', media_type: file.mimeType, data: file.data } });
+  }
+  content.push({ type: 'text', text: extractPrompt_(text, !!file, hints) });
+  var body = {
+    model: CLAUDE_MODEL,
+    max_tokens: 16000,
+    // If the model declines a request, the API retries it on Anthropic's recommended fallback model
+    fallbacks: 'default',
+    output_config: { effort: 'low', format: { type: 'json_schema', schema: EXTRACT_SCHEMA } },
+    messages: [{ role: 'user', content: content }]
+  };
+  var resp;
+  try {
+    resp = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
+      payload: JSON.stringify(body),
+      muteHttpExceptions: true
+    });
+  } catch (err) {
+    return { error: 'ai_unreachable' };
+  }
+  var code = resp.getResponseCode();
+  var json = {};
+  try { json = JSON.parse(resp.getContentText()); } catch (err) { /* handled below */ }
+  if (code === 401 || code === 403) return { error: 'ai_key_bad' };
+  if (code === 429 || code >= 500) return { error: 'ai_busy' };
+  if (code !== 200) return { error: 'ai_failed', message: String((json.error && json.error.message) || ('HTTP ' + code)).slice(0, 300) };
+  if (json.stop_reason === 'refusal') return { error: 'ai_refused' };
+  if (json.stop_reason === 'max_tokens') return { error: 'ai_failed', message: 'The document is too long to read in one go. Try a shorter part of it.' };
+  var texts = (json.content || []).filter(function (b) { return b.type === 'text'; });
+  var parsed;
+  try { parsed = JSON.parse(texts[texts.length - 1].text); } catch (err) { return { error: 'ai_failed', message: 'Unreadable answer.' }; }
+  return { items: Array.isArray(parsed.items) ? parsed.items.slice(0, 50) : [], warnings: Array.isArray(parsed.warnings) ? parsed.warnings.map(String).slice(0, 20) : [] };
+}
+
+/*
+ * Uploaded files go to a "Trip app uploads" folder in the Sheet owner's Drive, through
+ * the Drive API with the drive.file permission: the script can see only files it
+ * created itself, never the rest of the Drive. Family members open a file through the
+ * app (action "attachment"), which serves only files inside that folder.
+ */
+function driveFetch_(url, opts) {
+  opts = opts || {};
+  opts.headers = { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() };
+  opts.muteHttpExceptions = true;
+  var r = UrlFetchApp.fetch(url, opts);
+  if (r.getResponseCode() >= 300) throw new Error('Drive replied ' + r.getResponseCode());
+  return r;
+}
+
+function uploadsFolderId_() {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty('UPLOAD_FOLDER_ID');
+  if (id) {
+    try {
+      var f = JSON.parse(driveFetch_('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id) + '?fields=id,trashed').getContentText());
+      if (!f.trashed) return id;
+    } catch (err) { /* deleted: make a new one */ }
+  }
+  var created = JSON.parse(driveFetch_('https://www.googleapis.com/drive/v3/files?fields=id', {
+    method: 'post', contentType: 'application/json',
+    payload: JSON.stringify({ name: UPLOAD_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder', description: 'Files uploaded from the trip app. Shared with nobody; family members open them through the app.' })
+  }).getContentText());
+  props.setProperty('UPLOAD_FOLDER_ID', created.id);
+  return created.id;
+}
+
+function saveUpload_(file, bytes, me) {
+  var folder = uploadsFolderId_();
+  var stamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  var meta = JSON.parse(driveFetch_('https://www.googleapis.com/drive/v3/files?fields=id', {
+    method: 'post', contentType: 'application/json',
+    payload: JSON.stringify({ name: stamp + ' ' + file.name, mimeType: file.mimeType || 'application/octet-stream', parents: [folder], appProperties: { uploadedBy: me.email }, description: 'Uploaded by ' + me.name + ' from the trip app' })
+  }).getContentText());
+  driveFetch_('https://www.googleapis.com/upload/drive/v3/files/' + encodeURIComponent(meta.id) + '?uploadType=media', {
+    method: 'patch', contentType: file.mimeType || 'application/octet-stream',
+    payload: Utilities.newBlob(bytes, file.mimeType || 'application/octet-stream', file.name)
+  });
+  return 'https://drive.google.com/file/d/' + meta.id + '/view';
+}
+
+/** Drive file ID from an Attachment cell (a Drive link) or a bare ID. */
+function driveId_(s) {
+  var m = String(s).match(/\/file\/d\/([\w-]{10,})/) || String(s).match(/^([\w-]{10,})$/);
+  return m ? m[1] : null;
+}
+
+/** File metadata, only for files in the uploads folder (anything else reads as not found). */
+function uploadMeta_(s) {
+  var id = driveId_(s);
+  var folder = PropertiesService.getScriptProperties().getProperty('UPLOAD_FOLDER_ID');
+  if (!id || !folder) return null;
+  try {
+    var f = JSON.parse(driveFetch_('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id) + '?fields=id,name,mimeType,parents,trashed,size,appProperties').getContentText());
+    if (f.trashed || (f.parents || []).indexOf(folder) < 0) return null;
+    return f;
+  } catch (err) {
+    return null;
+  }
+}
+
+function getAttachment_(s) {
+  var f = uploadMeta_(s);
+  if (!f) return { ok: false, error: 'no_attachment' };
+  var bytes = driveFetch_('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(f.id) + '?alt=media').getBlob().getBytes();
+  return { ok: true, name: f.name, mimeType: f.mimeType, data: Utilities.base64Encode(bytes) };
+}
+
+/** Moves an upload to the Drive trash when the person added nothing from it. Only the uploader or the administrator can. */
+function discardUpload_(s, me) {
+  var f = uploadMeta_(s);
+  if (!f) return { ok: true };
+  if (me.role !== 'admin' && (f.appProperties || {}).uploadedBy !== me.email) return { ok: false, error: 'not_yours' };
+  driveFetch_('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(f.id), {
+    method: 'patch', contentType: 'application/json', payload: JSON.stringify({ trashed: true })
+  });
+  return { ok: true };
+}
+
+/* ------------------------------------------------------------------ */
 /* IDs and geocoding for rows typed directly into the Sheet            */
 /* ------------------------------------------------------------------ */
 
@@ -766,6 +1003,9 @@ function onOpen() {
     .addSeparator()
     .addItem('Fill IDs and map locations now', 'menuFillMissing')
     .addItem('Turn on automatic location filling', 'installTriggers')
+    .addSeparator()
+    .addItem('Set the Claude API key (reading bookings)…', 'menuSetClaudeKey')
+    .addItem('Turn off reading bookings with Claude', 'menuClearClaudeKey')
     .addToUi();
 }
 
@@ -827,6 +1067,21 @@ function menuListAccess() {
       return u.name + ' – ' + u.email + (u.role === 'admin' ? ' (administrator)' : '') + (u.disabled ? ' – blocked' : '') + ' – signed in on ' + (u.sessions || []).length + ' device(s)';
     }).join('\n')
     : 'Nobody yet. Use Trip app → Set up the administrator (you)…', SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+function menuSetClaudeKey() {
+  var ui = SpreadsheetApp.getUi();
+  var r = ui.prompt('Claude API key', 'Paste the API key from console.anthropic.com (it starts with sk-ant-). It is kept in this script’s settings and never sent to the app. Set a monthly spend limit in the Anthropic console.', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  var key = r.getResponseText().trim();
+  if (!/^sk-ant-[\w-]{20,}$/.test(key)) { ui.alert('That does not look like an Anthropic API key. Nothing was saved.'); return; }
+  PropertiesService.getScriptProperties().setProperty('ANTHROPIC_API_KEY', key);
+  ui.alert('Saved. Family members can now use “Import from a file or text” in the app (after you deploy a new version, if you have not yet).');
+}
+
+function menuClearClaudeKey() {
+  PropertiesService.getScriptProperties().deleteProperty('ANTHROPIC_API_KEY');
+  SpreadsheetApp.getUi().alert('Reading bookings with Claude is off. The key was removed from this script.');
 }
 
 function menuFillMissing() {

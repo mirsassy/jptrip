@@ -47,6 +47,16 @@ Parents and their children form a **household** (see **Settings → Families**).
 2. Fill in what you know. For **Who**, tap **Everyone** or tap people's names.
 3. Tap **Add**.
 
+**Who** is required for stays, transport and reservations: tap the people going, or a family's name.
+
+### Import a booking from an email, PDF or screenshot
+1. Tap the red **+** → **Import from a file or pasted text**.
+2. Paste the confirmation email text, or tap **Choose a file or photo** (a PDF, a screenshot, a photo of a ticket).
+3. Tap **Read it** and wait up to a minute.
+4. For each booking found, tap **Check and add**: the form is filled in for you. Check the dates and times, choose **Who** is going, then tap **Add**.
+
+Leave **Keep a copy** ticked to keep the file with the booking: it opens from the booking's **File** link or form. What you import is sent to Claude (Anthropic) to be read, so leave out card and passport numbers. If the app says importing is not turned on, ask the trip organizer.
+
 To change something, tap the pencil next to it. To cancel a booking, open it and tap **Cancel booking**: it stays on record as Cancelled. Your name is recorded on every change you make.
 
 **Map pin in the wrong place?** In Google Maps, find the place, tap **Share** → **Copy link**. Then in the trip app, open the item, paste the link under **Map location**, tap **Use**, then **Save**.

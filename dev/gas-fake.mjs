@@ -146,7 +146,7 @@ export function seedTabs(tz = 'America/Los_Angeles') {
     ],
     Groups: [['Group', 'Members', 'Notes'], ['Everyone', 'Avery, Blake, Casey, Drew, Emery, Frankie, Gale, Kit, Robin', 'Whole family']],
     Stays: [
-      ['Check-in', 'Check-out', 'City', 'Hotel', 'Address', 'Who', 'Status', 'Notes', 'Confirmation #', 'ID', 'Lat', 'Lng', 'Last edited by'],
+      ['Check-in', 'Check-out', 'City', 'Hotel', 'Address', 'Who', 'Status', 'Notes', 'Confirmation #', 'ID', 'Lat', 'Lng', 'Last edited by', 'Attachment'],
       [d(3, 4), d(3, 5), 'Sapporo', '', '', 'Everyone', 'Tentative'],
       [d(3, 5), d(3, 8), 'Otaru', '', '', 'Everyone', 'Tentative'],
       [d(3, 8), d(3, 10), 'Hakodate', '', '', 'Everyone', 'Tentative'],
@@ -156,8 +156,8 @@ export function seedTabs(tz = 'America/Los_Angeles') {
       [d(3, 18), d(3, 21), 'Yokohama', '', '', 'Everyone', 'Tentative'],
       [d(3, 21), d(3, 27), 'Okinawa', '', '', 'Everyone', 'Tentative', 'Islands not yet chosen.'],
     ],
-    Transport: [['Date', 'Depart', 'Arrive', 'Mode', 'From', 'To', 'Carrier / train', 'Who', 'Seats', 'Confirmation #', 'Status', 'Notes', 'ID', 'From Lat', 'From Lng', 'To Lat', 'To Lng', 'Last edited by']],
-    Reservations: [['Date', 'Time', 'Type', 'Name', 'City', 'Address', 'Who', 'Party size', 'Cancellation deadline', 'Kid-friendly', 'Confirmation #', 'Status', 'Link', 'Notes', 'ID', 'Lat', 'Lng', 'Last edited by']],
+    Transport: [['Date', 'Depart', 'Arrive', 'Mode', 'From', 'To', 'Carrier / train', 'Who', 'Seats', 'Confirmation #', 'Status', 'Notes', 'ID', 'From Lat', 'From Lng', 'To Lat', 'To Lng', 'Last edited by', 'Attachment']],
+    Reservations: [['Date', 'Time', 'Type', 'Name', 'City', 'Address', 'Who', 'Party size', 'Cancellation deadline', 'Kid-friendly', 'Confirmation #', 'Status', 'Link', 'Notes', 'ID', 'Lat', 'Lng', 'Last edited by', 'Attachment']],
     'Restaurant ideas': [['Name', 'City', 'Cuisine', 'Price range', 'Kid-friendly', 'Reservation needed', 'Booking method', 'Link', 'Suggested by', 'Status', 'Notes', 'Address', 'ID', 'Lat', 'Lng', 'Last edited by']],
     Notes: [['Date', 'City', 'Who', 'Note', 'ID', 'Last edited by']],
     Lists: [
@@ -201,11 +201,59 @@ function fakeGeocode(q, ss) {
   return { status: 'OK', results: [{ geometry: { location: { lat, lng } } }] };
 }
 
+const json = (code, obj) => ({ getResponseCode: () => code, getContentText: () => JSON.stringify(obj), getHeaders: () => ({}) });
+
+/**
+ * Stand-in for the Claude Messages API. It answers from the pasted text so tests can
+ * steer it: "REFUSE" -> a refusal, "BADKEY" -> 401, "NOTHING" -> no items;
+ * anything else -> a fictional hotel stay and a flight.
+ */
+export const FAKE_CLAUDE_ITEMS = [
+  { kind: 'stay', status: 'Confirmed', name: 'Harbor View Hotel', date: '2030-03-05', end_date: '2030-03-08', time: '', end_time: '', city: 'Otaru', address: '1-2-3 Ironai, Otaru', from: '', to: '', mode: '', reservation_type: '', seats: '', confirmation: 'HV-0042', party_size: '4', guests: ['Avery Example', 'Kit'], cancellation_deadline: '2030-03-03 18:00', link: '', notes: 'Two rooms, breakfast included' },
+  { kind: 'transport', status: 'Confirmed', name: 'Air Example 123', date: '2030-03-04', end_date: '', time: '09:10', end_time: '10:40', city: '', address: '', from: 'Haneda Airport', to: 'Sapporo', mode: 'flight', reservation_type: '', seats: '12A-12D', confirmation: 'QX7Z9P', party_size: '', guests: ['Casey Example', 'Drew Example', 'Pat Stranger'], cancellation_deadline: '', link: '', notes: '' },
+];
+function fakeClaude(opts, calls) {
+  const body = JSON.parse(opts.payload);
+  calls.claude.push({ headers: opts.headers, body });
+  const prompt = body.messages[0].content.filter((b) => b.type === 'text').map((b) => b.text).join('\n');
+  if (/BADKEY/.test(prompt)) return json(401, { type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } });
+  if (/REFUSE/.test(prompt)) return json(200, { stop_reason: 'refusal', content: [] });
+  const out = /NOTHING/.test(prompt) ? { items: [], warnings: ['No bookings found.'] } : { items: FAKE_CLAUDE_ITEMS, warnings: ['Check the flight time zone.'] };
+  return json(200, { stop_reason: 'end_turn', content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: JSON.stringify(out) }] });
+}
+
+/** Minimal Drive v3 REST stand-in: create, upload media, read metadata/content, trash. */
+function fakeDrive(url, opts, drive) {
+  if (opts.headers?.Authorization !== 'Bearer fake-oauth-token') return json(401, {});
+  const u = new URL(url);
+  const method = (opts.method || 'get').toLowerCase();
+  const m = u.pathname.match(/^\/(upload\/)?drive\/v3\/files(?:\/([^/]+))?$/);
+  if (!m) return json(404, {});
+  const [, upload, id] = m;
+  const pick = (f) => {
+    const fields = (u.searchParams.get('fields') || 'id').split(',');
+    return Object.fromEntries(fields.map((k) => [k, f[k]]));
+  };
+  if (!id && method === 'post') {
+    const meta = JSON.parse(opts.payload);
+    const f = { id: `drv${drive.size + 1}xxxxxxxxxxxx`, trashed: false, parents: [], bytes: [], ...meta };
+    drive.set(f.id, f);
+    return json(200, pick(f));
+  }
+  const f = drive.get(decodeURIComponent(id || ''));
+  if (!f) return json(404, { error: { message: 'File not found' } });
+  if (upload && method === 'patch') { f.bytes = opts.payload.getBytes(); f.size = String(f.bytes.length); return json(200, { id: f.id }); }
+  if (method === 'patch') { Object.assign(f, JSON.parse(opts.payload)); return json(200, { id: f.id }); }
+  if (u.searchParams.get('alt') === 'media') return { getResponseCode: () => 200, getBlob: () => ({ getBytes: () => f.bytes }), getHeaders: () => ({}) };
+  return json(200, pick(f));
+}
+
 export function createGas({ tz = 'America/Los_Angeles', tabs = seedTabs(tz), users = TEST_USERS } = {}) {
   const ss = new FakeSpreadsheet(tabs, tz);
   const props = new Map();
   const cache = new Map();
-  const calls = { geocode: 0 };
+  const calls = { geocode: 0, claude: [] };
+  const drive = new Map();
   const ctx = {
     console,
     SpreadsheetApp: { getActive: () => ss, getUi: () => { throw new Error('no ui'); } },
@@ -241,18 +289,28 @@ export function createGas({ tz = 'America/Los_Angeles', tabs = seedTabs(tz), use
       base64Encode: (bytes) => Buffer.from(bytes.map((b) => b & 255)).toString('base64'),
       sleep() {},
       base64EncodeWebSafe: (s) => Buffer.from(s).toString('base64url'),
+      base64Decode: (s) => {
+        if (!/^[A-Za-z0-9+/=\s]*$/.test(s)) throw new Error('Could not decode string.');
+        return [...Buffer.from(s, 'base64')].map((b) => (b > 127 ? b - 256 : b));
+      },
+      newBlob: (data, type, name) => {
+        const bytes = typeof data === 'string' ? [...Buffer.from(data)] : data;
+        return { type, name, getBytes: () => bytes };
+      },
     },
     Maps: { newGeocoder: () => ({ setRegion() { return this; }, setLanguage() { return this; }, geocode: (q) => { calls.geocode++; return fakeGeocode(q, ss); } }) },
     UrlFetchApp: {
-      fetch(url) {
+      fetch(url, opts = {}) {
         if (url.startsWith('https://maps.app.goo.gl/')) {
           return { getHeaders: () => ({ Location: 'https://www.google.com/maps/place/Kinkaku-ji/@35.0394,135.7292,17z' }), getContentText: () => '' };
         }
+        if (url === 'https://api.anthropic.com/v1/messages') return fakeClaude(opts, calls);
+        if (url.startsWith('https://www.googleapis.com/')) return fakeDrive(url, opts, drive);
         return { getHeaders: () => ({}), getContentText: () => '' };
       },
     },
     Session: { getActiveUser: () => ({ getEmail: () => '' }) },
-    ScriptApp: { getProjectTriggers: () => [] },
+    ScriptApp: { getProjectTriggers: () => [], getOAuthToken: () => 'fake-oauth-token' },
   };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(here, '../apps-script/Code.gs'), 'utf8'), ctx, { filename: 'Code.gs' });
@@ -270,5 +328,5 @@ export function createGas({ tz = 'America/Los_Angeles', tabs = seedTabs(tz), use
     if (!r.ok) throw new Error(`login failed: ${r.error}`);
     return r.token;
   }
-  return { ss, ctx, post, login, props, cache, calls };
+  return { ss, ctx, post, login, props, cache, calls, drive };
 }

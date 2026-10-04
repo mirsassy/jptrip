@@ -6,6 +6,7 @@ import { state, enqueue, resolveLocation } from '../lib/store.js';
 import { parseLocation } from '../lib/api.js';
 import { parseDate, parseTime, jpNow } from '../lib/dates.js';
 import { STATUSES } from '../lib/model.js';
+import { openImport, openAttachment } from './import.js';
 
 const PREFIX = { Stays: 'S', Transport: 'T', Reservations: 'R', 'Restaurant ideas': 'I', Notes: 'N' };
 const KEY = { People: 'Name', Groups: 'Group' };
@@ -21,24 +22,25 @@ function fieldsFor(tab) {
     case 'Stays': return [
       F('Check-in', 'date', { req: true, half: true }), F('Check-out', 'date', { req: true, half: true }),
       F('City', 'city', { req: true }), F('Hotel', 'text'), F('Address', 'text', { hint: 'helps the map pin' }),
-      F('Who', 'who'), F('Status', 'select', { opts: statusOpts, def: 'Tentative' }), F('Confirmation #', 'text'),
-      F('Notes', 'textarea'), F('Lat', 'location', { lng: 'Lng' }),
+      F('Who', 'who', { req: true, reqMsg: 'Pick who is going' }), F('Status', 'select', { opts: statusOpts, def: 'Tentative' }), F('Confirmation #', 'text'),
+      F('Notes', 'textarea'), F('Lat', 'location', { lng: 'Lng' }), F('Attachment', 'attachment'),
     ];
     case 'Transport': return [
       F('Date', 'date', { req: true }), F('Depart', 'time', { half: true }), F('Arrive', 'time', { half: true }),
       F('Mode', 'select', { opts: () => listCol('Mode') }), F('From', 'place'), F('To', 'place'),
-      F('Carrier / train', 'text'), F('Who', 'who'), F('Seats', 'text'), F('Confirmation #', 'text'),
+      F('Carrier / train', 'text'), F('Who', 'who', { req: true, reqMsg: 'Pick who is going' }), F('Seats', 'text'), F('Confirmation #', 'text'),
       F('Status', 'select', { opts: statusOpts, def: 'Tentative' }), F('Notes', 'textarea'),
       F('From Lat', 'location', { lng: 'From Lng', label: 'From: map location' }), F('To Lat', 'location', { lng: 'To Lng', label: 'To: map location' }),
+      F('Attachment', 'attachment'),
     ];
     case 'Reservations': return [
       F('Date', 'date', { req: true, half: true }), F('Time', 'time', { half: true }),
       F('Type', 'select', { opts: () => listCol('Reservation type') }), F('Name', 'text', { req: true }),
-      F('City', 'city'), F('Address', 'text', { hint: 'helps the map pin' }), F('Who', 'who'),
+      F('City', 'city'), F('Address', 'text', { hint: 'helps the map pin' }), F('Who', 'who', { req: true, reqMsg: 'Pick who is going' }),
       F('Party size', 'number', { half: true, hint: 'blank = everyone in Who' }), F('Kid-friendly', 'select', { opts: yesNoOpts, half: true }),
       F('Cancellation deadline', 'datetime', { hint: 'when a fee starts; Japan time' }), F('Confirmation #', 'text'),
       F('Status', 'select', { opts: statusOpts, def: 'Tentative' }), F('Link', 'url'), F('Notes', 'textarea'),
-      F('Lat', 'location', { lng: 'Lng' }),
+      F('Lat', 'location', { lng: 'Lng' }), F('Attachment', 'attachment'),
     ];
     case 'Restaurant ideas': return [
       F('Name', 'text', { req: true }), F('City', 'city'), F('Cuisine', 'text', { half: true }), F('Price range', 'text', { half: true, hint: 'e.g. ¥¥' }),
@@ -60,8 +62,11 @@ function fieldsFor(tab) {
 
 export const TAB_TITLES = { Stays: 'stay', Transport: 'transport', Reservations: 'reservation', 'Restaurant ideas': 'restaurant idea', Notes: 'note', People: 'person', Groups: 'group' };
 
-/** Opens the add/edit form for a tab. `row` is the raw Sheet row (or null to add). `preset` pre-fills a new row. */
-export function openEditor(tab, row = null, preset = {}) {
+/**
+ * Opens the add/edit form for a tab. `row` is the raw Sheet row (or null to add). `preset` pre-fills a new row.
+ * `onSaved` runs after the change is queued (the import list uses it to tick off a booking).
+ */
+export function openEditor(tab, row = null, preset = {}, { onSaved, intro } = {}) {
   const isNew = !row;
   const orig = row ? { ...row } : {};
   const values = row ? { ...row } : { ...preset };
@@ -70,7 +75,7 @@ export function openEditor(tab, row = null, preset = {}) {
   if (isNew && tab !== 'People' && tab !== 'Groups' && fields.some((f) => f.col === 'Date') && !values.Date) values.Date = state.date || jpNow().date;
   if (isNew && tab === 'Stays' && !values['Check-in']) values['Check-in'] = state.date || '';
 
-  const form = h('form', { novalidate: true });
+  const form = h('form', { novalidate: true }, intro || null);
   const pendingCities = new Set();
   const errors = new Map();
 
@@ -85,6 +90,7 @@ export function openEditor(tab, row = null, preset = {}) {
 
   let row2 = null;
   fields.forEach((f) => {
+    if (f.type === 'attachment' && !values[f.col]) return; // only rows added from an uploaded file have one
     const el = fieldEl(f, values, pendingCities, tab);
     if (f.half) {
       if (!row2) { row2 = h('div', { class: 'two' }); form.append(row2); }
@@ -115,7 +121,7 @@ export function openEditor(tab, row = null, preset = {}) {
   async function submit(override) {
     const v = override ? { ...orig, ...override } : collect(form, fields, values);
     if (!override) {
-      fields.forEach((f) => setErr(f.col, f.req && !String(v[f.col] ?? '').trim() ? 'Required' : null));
+      fields.forEach((f) => setErr(f.col, f.req && !String(v[f.col] ?? '').trim() ? (f.reqMsg || 'Required') : null));
       if (tab === 'Stays' && v['Check-in'] && v['Check-out'] && v['Check-out'] <= v['Check-in']) setErr('Check-out', 'Must be after check-in');
       if (tab === 'People' && isNew && state.model.peopleByName.has(String(v.Name).trim())) setErr('Name', 'Already in the People tab');
       if (errors.size) { form.querySelector('.invalid input, .invalid select, .invalid textarea')?.focus(); return; }
@@ -128,7 +134,7 @@ export function openEditor(tab, row = null, preset = {}) {
       if (k.startsWith('_')) return;
       if (String(v[k] ?? '') !== String(orig[k] ?? '')) changed[k] = v[k] ?? '';
     });
-    if (!Object.keys(changed).length) { s.close(); return; }
+    if (!Object.keys(changed).length) { s.close(); onSaved?.(); return; }
     for (const c of pendingCities) {
       if (String(v.City || '').toLowerCase() === c.toLowerCase()) await enqueue('addListValue', { column: 'City', value: c });
     }
@@ -137,6 +143,7 @@ export function openEditor(tab, row = null, preset = {}) {
     await enqueue('upsert', { tab, key: isNew ? null : orig[keyCol], values: changed });
     toast(navigator.onLine ? 'Saved. Syncing to the Sheet…' : 'Saved on this phone. It will sync when you are online.');
     s.close();
+    onSaved?.();
   }
   form.addEventListener('submit', (e) => { e.preventDefault(); submit(); });
 
@@ -162,7 +169,7 @@ function collect(form, fields, values) {
 function fieldEl(f, values, pendingCities, tab) {
   const label = f.label || (f.type === 'location' ? 'Map location' : f.col);
   // Fields with several controls use a div: a <label> would forward taps on it to the first button inside.
-  const multi = ['who', 'location', 'datetime', 'city', 'place', 'household'].includes(f.type);
+  const multi = ['who', 'location', 'datetime', 'city', 'place', 'household', 'attachment'].includes(f.type);
   const wrap = h(multi ? 'div' : 'label', { class: 'field', dataset: { col: f.col }, role: multi ? 'group' : null, 'aria-label': multi ? label : null }, h('span', null, label, f.req ? ' *' : '', f.hint ? h('span', { class: 'hint' }, ` (${f.hint})`) : null));
   const v = values[f.col] ?? '';
   const name = f.col;
@@ -260,6 +267,11 @@ function fieldEl(f, values, pendingCities, tab) {
     case 'location': {
       input = locationField(values, f);
       wrap._get = () => input._value();
+      break;
+    }
+    case 'attachment': {
+      input = h('div', null, h('button', { type: 'button', class: 'btn small', onclick: () => openAttachment(String(v)) }, icon('clip', 18), 'View the uploaded file'));
+      wrap._get = () => ({ [f.col]: v });
       break;
     }
     default: {
@@ -376,6 +388,10 @@ export function openAddMenu() {
     ['Notes', 'Note', 'note'], ['Restaurant ideas', 'Restaurant idea', 'idea'],
   ];
   const body = h('div', null,
+    h('button', { class: 'btn primary', style: { width: '100%', justifyContent: 'flex-start', marginBottom: '6px' }, onclick: () => { s.close(); openImport(); } },
+      icon('import'), 'Import from a file or pasted text'),
+    h('p', { class: 'small muted', style: { margin: '0 0 12px' } }, 'A confirmation email, PDF or screenshot: Claude fills in the form for you to check.'),
+    h('div', { class: 'section-title' }, 'Or add by hand'),
     h('div', { style: { display: 'grid', gap: '8px' } }, opts.map(([tab, label, ic]) => h('button', { class: 'btn', style: { justifyContent: 'flex-start' }, onclick: () => { s.close(); openEditor(tab); } }, icon(ic), label))),
     h('div', { class: 'section-title' }, 'Less often'),
     h('div', { class: 'row' },

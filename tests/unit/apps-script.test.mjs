@@ -262,3 +262,135 @@ describe('Apps Script API: data', () => {
     expect(r.data.tabs.People.rows).toHaveLength(9);
   });
 });
+
+describe('Apps Script API: reading bookings with Claude', () => {
+  const KEY = 'sk-ant-test-key-0123456789abcdefghij';
+  const setup = () => { const g = createGas(); g.props.set('ANTHROPIC_API_KEY', KEY); return g; };
+  const pdf = { name: 'hotel.pdf', mimeType: 'application/pdf', data: Buffer.from('%PDF-1.4 fake').toString('base64') };
+
+  it('is off until the API key is set in the Sheet menu', () => {
+    const g = createGas();
+    const r = g.post({ action: 'extract', token: g.login(casey), text: 'Hotel booking' });
+    expect(r.error).toBe('ai_not_set');
+    expect(g.calls.claude).toHaveLength(0);
+  });
+
+  it('needs a signed-in person', () => {
+    const g = setup();
+    expect(g.post({ action: 'extract', token: 'nope', text: 'Hotel' }).error).toBe('bad_session');
+    expect(g.calls.claude).toHaveLength(0);
+  });
+
+  it('sends pasted text with trip hints and returns rows; the key never reaches the app', () => {
+    const g = setup();
+    const r = g.post({ action: 'extract', token: g.login(casey), text: 'Your stay at Harbor View', hints: { start: '2030-03-04', end: '2030-03-27', cities: ['Otaru', 'Sapporo'], modes: ['Flight'], types: ['Restaurant'] } });
+    expect(r.ok).toBe(true);
+    expect(r.items.map((i) => i.kind)).toEqual(['stay', 'transport']);
+    expect(r.warnings).toContain('Check the flight time zone.');
+    expect(JSON.stringify(r)).not.toContain(KEY);
+    const call = g.calls.claude[0];
+    expect(call.headers).toMatchObject({ 'x-api-key': KEY, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'server-side-fallback-2026-07-01' });
+    expect(call.body).toMatchObject({ model: 'claude-opus-5-5', fallbacks: 'default', output_config: { effort: 'low', format: { type: 'json_schema' } } });
+    expect(call.body.tool_choice).toBeUndefined();
+    expect(call.body.thinking).toBeUndefined();
+    const prompt = call.body.messages[0].content.at(-1).text;
+    expect(prompt).toContain('Your stay at Harbor View');
+    expect(prompt).toContain('2030-03-04 to 2030-03-27');
+    expect(prompt).toContain('Known cities: Otaru, Sapporo');
+    // The family's names from the People tab are not sent
+    expect(prompt).not.toMatch(/Avery|Blake|Robin/);
+  });
+
+  it('every object in the output schema lists all its properties as required, with no extras', () => {
+    const g = setup();
+    g.post({ action: 'extract', token: g.login(casey), text: 'x' });
+    const walk = (s) => {
+      if (s.type === 'object') {
+        expect(s.additionalProperties).toBe(false);
+        expect([...s.required].sort()).toEqual(Object.keys(s.properties).sort());
+        Object.values(s.properties).forEach(walk);
+      }
+      if (s.type === 'array') walk(s.items);
+    };
+    walk(g.calls.claude[0].body.output_config.format.schema);
+  });
+
+  it('sends a PDF as a document block and an image as an image block', () => {
+    const g = setup();
+    const token = g.login(casey);
+    g.post({ action: 'extract', token, file: pdf });
+    expect(g.calls.claude[0].body.messages[0].content[0]).toEqual({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf.data } });
+    g.post({ action: 'extract', token, file: { ...pdf, name: 'a.png', mimeType: 'image/png' } });
+    expect(g.calls.claude[1].body.messages[0].content[0].type).toBe('image');
+  });
+
+  it('refuses unreadable file types without text, and files over the size limit', () => {
+    const g = setup();
+    const token = g.login(casey);
+    expect(g.post({ action: 'extract', token, file: { ...pdf, mimeType: 'application/zip' } }).error).toBe('file_type');
+    const big = Buffer.alloc(8 * 1024 * 1024 + 1).toString('base64');
+    expect(g.post({ action: 'extract', token, file: { ...pdf, data: big } }).error).toBe('file_too_big');
+    expect(g.post({ action: 'extract', token }).error).toBe('nothing_to_read');
+    expect(g.calls.claude).toHaveLength(0);
+  });
+
+  it('reports refusals, bad keys and the daily limit', () => {
+    const g = setup();
+    const token = g.login(casey);
+    expect(g.post({ action: 'extract', token, text: 'REFUSE' }).error).toBe('ai_refused');
+    expect(g.post({ action: 'extract', token, text: 'BADKEY' }).error).toBe('ai_key_bad');
+    for (let i = 2; i < 40; i++) g.post({ action: 'extract', token, text: 'NOTHING' });
+    expect(g.post({ action: 'extract', token, text: 'x' }).error).toBe('ai_limit');
+    // The limit is per person
+    expect(g.post({ action: 'extract', token: g.login(admin), text: 'x' }).ok).toBe(true);
+  });
+
+  it('keeps the file in a private uploads folder only when asked, and serves it back', () => {
+    const g = setup();
+    const token = g.login(casey);
+    expect(g.post({ action: 'extract', token, file: pdf }).attachment).toBeUndefined();
+    expect(g.drive.size).toBe(0);
+    const r = g.post({ action: 'extract', token, file: pdf, keep: true });
+    expect(r.attachment).toMatch(/^https:\/\/drive\.google\.com\/file\/d\/[\w-]+\/view$/);
+    const folderId = g.props.get('UPLOAD_FOLDER_ID');
+    const folder = g.drive.get(folderId);
+    expect(folder).toMatchObject({ name: 'Trip app uploads', mimeType: 'application/vnd.google-apps.folder' });
+    const file = [...g.drive.values()].find((f) => f.parents?.includes(folderId));
+    expect(file).toMatchObject({ mimeType: 'application/pdf', appProperties: { uploadedBy: 'casey@example.com' } });
+    expect(file.name).toMatch(/hotel\.pdf$/);
+    // Anyone signed in can open it through the app
+    const a = g.post({ action: 'attachment', token: g.login(blake), id: r.attachment });
+    expect(a).toMatchObject({ ok: true, mimeType: 'application/pdf' });
+    expect(Buffer.from(a.data, 'base64').toString()).toBe('%PDF-1.4 fake');
+    // A second upload reuses the folder
+    g.post({ action: 'extract', token, file: pdf, keep: true });
+    expect([...g.drive.values()].filter((f) => f.mimeType === 'application/vnd.google-apps.folder')).toHaveLength(1);
+  });
+
+  it('serves only files inside the uploads folder', () => {
+    const g = setup();
+    const token = g.login(casey);
+    g.post({ action: 'extract', token, file: pdf, keep: true });
+    g.drive.set('otherfile12345', { id: 'otherfile12345', name: 'private.pdf', parents: ['root'], trashed: false, bytes: [1] });
+    expect(g.post({ action: 'attachment', token, id: 'https://drive.google.com/file/d/otherfile12345/view' }).error).toBe('no_attachment');
+    expect(g.post({ action: 'attachment', token, id: '../etc' }).error).toBe('no_attachment');
+    // The folder itself is not a file to serve
+    expect(g.post({ action: 'attachment', token, id: g.props.get('UPLOAD_FOLDER_ID') }).error).toBe('no_attachment');
+  });
+
+  it('lets only the uploader or the administrator discard an upload', () => {
+    const g = setup();
+    const r = g.post({ action: 'extract', token: g.login(casey), file: pdf, keep: true });
+    expect(g.post({ action: 'discardUpload', token: g.login(blake), id: r.attachment }).error).toBe('not_yours');
+    expect(g.post({ action: 'discardUpload', token: g.login(casey), id: r.attachment }).ok).toBe(true);
+    expect(g.post({ action: 'attachment', token: g.login(casey), id: r.attachment }).error).toBe('no_attachment');
+  });
+
+  it('stores the Attachment link on a row like any other field', () => {
+    const g = setup();
+    const token = g.login(casey);
+    const r = g.post({ action: 'extract', token, file: pdf, keep: true });
+    const up = g.post({ action: 'upsert', token, tab: 'Stays', values: { 'Check-in': '2030-03-05', 'Check-out': '2030-03-08', City: 'Otaru', Who: 'Casey', Attachment: r.attachment } });
+    expect(up.row.Attachment).toBe(r.attachment);
+  });
+});

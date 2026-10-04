@@ -189,6 +189,15 @@ test('required fields are checked before saving', async ({ page, context }) => {
   await dlg.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(dlg.getByText('Must be after check-in')).toBeVisible();
   await expect(dlg.locator('[data-col=City] .err')).toHaveText('Required');
+  await expect(dlg.locator('[data-col=Who] .err')).toHaveText('Pick who is going');
+  // Notes don't need a Who
+  await dlg.getByRole('button', { name: 'Close', exact: true }).last().click();
+  await page.getByRole('button', { name: 'Add to the trip' }).click();
+  await page.getByRole('button', { name: 'Note', exact: true }).click();
+  const note = page.getByRole('dialog', { name: 'Add note' });
+  await note.locator('textarea[name=Note]').fill('Bring adapters');
+  await note.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(note).toBeHidden();
 });
 
 test('edit a stay: paste a Google Maps link to fix the pin; only changed fields are sent', async ({ page, context }) => {
@@ -337,7 +346,7 @@ test('administrator: add a person, who then signs in with the starting PIN', asy
   await expect(done).toContainText('502817');
   await expect(done).toContainText('emery@example.com');
   await expect(done).toContainText(`#setup=${encodeURIComponent(API)}`);
-  await done.getByRole('button', { name: 'Close' }).click();
+  await done.getByRole('button', { name: 'Close', exact: true }).last().click();
   await expect(panel).toContainText('emery@example.com');
   const r = await post({ action: 'login', email: 'emery@example.com', pin: '502817' });
   expect(r.me).toMatchObject({ name: 'Emery', role: 'member', mustChangePin: true });
@@ -352,7 +361,7 @@ test('administrator: add a person, who then signs in with the starting PIN', asy
   expect((await post({ action: 'read', token: caseyToken })).error).toBe('bad_session');
 
   // Remove Blake
-  await page.getByRole('dialog', { name: 'Casey can now sign in' }).getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('dialog', { name: 'Casey can now sign in' }).getByRole('button', { name: 'Close', exact: true }).last().click();
   page.once('dialog', (d) => d.accept());
   await panel.locator('.item-row', { hasText: 'blake@example.com' }).getByRole('button', { name: 'Remove access' }).click();
   await expect(panel).not.toContainText('blake@example.com');
@@ -405,6 +414,107 @@ test('families: households in Settings, Who chips, party summary, and child chec
   await page.goto('/#issues');
   await page.locator('.sync-pill').click();
   await expect(page.getByText('“Kids club” (Mar 6) has Kit, Robin but no adult.')).toBeVisible();
+});
+
+async function openImport(page) {
+  await page.getByRole('button', { name: 'Add to the trip' }).click();
+  await page.getByRole('button', { name: 'Import from a file or pasted text' }).click();
+  return page.getByRole('dialog', { name: 'Import a booking' });
+}
+
+test('import pasted text: each booking opens pre-filled, and Who must be chosen', async ({ page, context }) => {
+  await open(page, context);
+  const dlg = await openImport(page);
+  await dlg.locator('textarea[name=import-text]').fill('Your stay at Harbor View Hotel, Otaru, Mar 5-8. Flight AX123 Haneda to Sapporo.');
+  await dlg.getByRole('button', { name: 'Read it' }).click();
+  const found = page.getByRole('dialog', { name: 'Bookings found' });
+  await expect(found).toContainText('Found 2 bookings');
+  await expect(found).toContainText('Double-check: Check the flight time zone.');
+  await expect(found).toContainText('Stay: Harbor View Hotel · Otaru · 2030-03-05 → 2030-03-08');
+  await expect(found).toContainText('Names in the booking not matched to People: Pat Stranger');
+
+  // The stay: pre-filled, guests matched to People
+  await found.locator('[data-import-tab=Stays]').getByRole('button', { name: 'Check and add' }).click();
+  const stay = page.getByRole('dialog', { name: 'Add stay' });
+  await expect(stay).toContainText('Filled in by Claude');
+  await expect(stay.locator('input[name=Hotel]')).toHaveValue('Harbor View Hotel');
+  await expect(stay.locator('input[name="Check-out"]')).toHaveValue('2030-03-08');
+  await expect(stay.locator('select[name=Status]')).toHaveValue('Confirmed');
+  await expect(stay.getByRole('button', { name: 'Kit (7)', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await stay.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(found.locator('[data-import-tab=Stays]')).toContainText('✓ Added');
+
+  // The flight: clear Who to show it is required, then choose
+  await found.locator('[data-import-tab=Transport]').getByRole('button', { name: 'Check and add' }).click();
+  const tr = page.getByRole('dialog', { name: 'Add transport' });
+  await expect(tr.locator('select[name=Mode]')).toHaveValue('Flight');
+  await tr.getByRole('button', { name: 'Casey', exact: true }).click();
+  await tr.getByRole('button', { name: 'Drew', exact: true }).click();
+  await tr.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(tr.locator('[data-col=Who] .err')).toHaveText('Pick who is going');
+  await tr.getByRole('group', { name: 'Groups and families' }).getByRole('button', { name: 'Casey and Drew' }).click();
+  await tr.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(found.locator('[data-import-tab=Transport]')).toContainText('✓ Added');
+  await found.getByRole('button', { name: 'Done' }).click();
+
+  await expect.poll(async () => (await sheetRows('Stays')).find((r) => r.Hotel === 'Harbor View Hotel')).toMatchObject({
+    'Check-in': '2030-03-05', 'Check-out': '2030-03-08', City: 'Otaru', Who: 'Avery, Kit', 'Confirmation #': 'HV-0042', Status: 'Confirmed', 'Last edited by': 'Avery', Attachment: '',
+  });
+  await expect.poll(async () => (await sheetRows('Transport')).find((r) => r['Carrier / train'] === 'Air Example 123')).toMatchObject({
+    Date: '2030-03-04', Depart: '09:10', Mode: 'Flight', From: 'Haneda Airport', To: 'Sapporo', Who: 'Casey, Drew',
+  });
+});
+
+test('import a PDF: the file is kept with the booking and opens from the day view', async ({ page, context }) => {
+  await open(page, context);
+  const dlg = await openImport(page);
+  await dlg.locator('input[type=file]').setInputFiles({ name: 'hotel.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 fictional booking') });
+  await expect(dlg).toContainText('hotel.pdf');
+  await expect(dlg.getByRole('checkbox')).toBeChecked();
+  await dlg.getByRole('button', { name: 'Read it' }).click();
+  const found = page.getByRole('dialog', { name: 'Bookings found' });
+  await expect(found).toContainText('The file is kept with each booking you add from here.');
+  await found.locator('[data-import-tab=Stays]').getByRole('button', { name: 'Check and add' }).click();
+  const stay = page.getByRole('dialog', { name: 'Add stay' });
+  await expect(stay.getByRole('button', { name: 'View the uploaded file' })).toBeVisible();
+  await stay.getByRole('button', { name: 'Add', exact: true }).click();
+  await found.getByRole('button', { name: 'Done' }).click();
+  await expect.poll(async () => (await sheetRows('Stays')).find((r) => r.Hotel === 'Harbor View Hotel')?.Attachment).toMatch(/^https:\/\/drive\.google\.com\/file\/d\//);
+  const uploads = await (await fetch(`${API}/uploads`)).json();
+  expect(uploads.find((f) => /hotel\.pdf$/.test(f.name))).toMatchObject({ mimeType: 'application/pdf', trashed: false });
+
+  await expect(page.locator('.sync-pill')).toContainText('Synced');
+  await page.getByRole('button', { name: /Mar 5(?!\d)/ }).first().click();
+  await page.getByRole('button', { name: 'File', exact: true }).first().click();
+  const view = page.getByRole('dialog', { name: 'Uploaded file' });
+  await expect(view).toContainText('hotel.pdf');
+  await expect(view.getByRole('link', { name: 'Open or save the file' })).toHaveAttribute('href', /^blob:/);
+});
+
+test('import: a kept file is discarded when nothing is added from it', async ({ page, context }) => {
+  await open(page, context);
+  const dlg = await openImport(page);
+  await dlg.locator('input[type=file]').setInputFiles({ name: 'tickets.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 tickets') });
+  await dlg.getByRole('button', { name: 'Read it' }).click();
+  await page.getByRole('dialog', { name: 'Bookings found' }).getByRole('button', { name: 'Done' }).click();
+  await expect.poll(async () => (await (await fetch(`${API}/uploads`)).json()).find((f) => /tickets\.pdf$/.test(f.name))?.trashed).toBe(true);
+});
+
+test('import: clear messages when reading is off, or nothing is found', async ({ page, context }) => {
+  await open(page, context);
+  await fetch(`${API}/claude-off`, { method: 'POST' });
+  let dlg = await openImport(page);
+  await dlg.locator('textarea[name=import-text]').fill('Dinner at 7');
+  await dlg.getByRole('button', { name: 'Read it' }).click();
+  await expect(page.getByRole('status')).toContainText('Reading bookings is not turned on yet');
+  await expect(dlg.getByRole('button', { name: 'Read it' })).toBeEnabled();
+  await dlg.getByRole('button', { name: 'Close', exact: true }).last().click();
+
+  await fetch(`${API}/claude-on`, { method: 'POST' });
+  dlg = await openImport(page);
+  await dlg.locator('textarea[name=import-text]').fill('NOTHING here');
+  await dlg.getByRole('button', { name: 'Read it' }).click();
+  await expect(page.getByRole('dialog', { name: 'Bookings found' })).toContainText('No bookings were found');
 });
 
 test('a change made directly in the Sheet shows up after sync', async ({ page, context }) => {

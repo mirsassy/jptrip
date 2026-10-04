@@ -5,6 +5,7 @@ import { makePass, selectedPeople } from '../lib/filters.js';
 import { addDays, fmtDay, jpNow } from '../lib/dates.js';
 import { whoChips, statusBadge, weatherChip, mapLinks, itemTimeLabel, personChip } from './common.js';
 import { openEditor } from './forms.js';
+import { openAttachment } from './import.js';
 
 let mode = (() => { try { return localStorage.getItem('trip.dayMode') || 'group'; } catch { return 'group'; } })();
 
@@ -98,6 +99,7 @@ function timelineRow(e, g, flaggedIds) {
   if (it.city && it.type !== 'stay') meta.push(h('span', null, it.city));
   if (it.raw['Confirmation #']) meta.push(h('span', null, `Conf. ${it.raw['Confirmation #']}`));
   if (it.raw.Seats) meta.push(h('span', null, `Seats ${it.raw.Seats}`));
+  if (it.raw.Attachment && e.kind !== 'staying') meta.push(h('button', { class: 'link', onclick: () => openAttachment(it.raw.Attachment) }, icon('clip', 14), ' File'));
   if (partial.length < g.people.length) meta.push(h('span', null, 'Only: ', whoChips(partial)));
   if (others.length) meta.push(h('span', null, `With ${others.join(', ')}`));
   if (it.raw._pending) meta.push(h('span', { class: 'pending-tag' }, 'Not synced yet'));

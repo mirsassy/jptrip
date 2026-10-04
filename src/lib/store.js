@@ -244,6 +244,20 @@ export async function eraseThisDevice({ keepUrl = false } = {}) {
   emit();
 }
 
+/** Sends pasted text and/or a file to be read by Claude (through the Sheet's script). */
+export async function extractBooking(payload) {
+  return callApi(state.config, 'extract', payload, { timeoutMs: 180000 });
+}
+
+/** Downloads a file kept with a booking (only files in the app's uploads folder). */
+export async function fetchAttachment(link) {
+  return callApi(state.config, 'attachment', { id: link }, { timeoutMs: 90000 });
+}
+
+export async function discardUpload(link) {
+  try { await callApi(state.config, 'discardUpload', { id: link }, { timeoutMs: 20000 }); } catch { /* it stays in the uploads folder */ }
+}
+
 export async function resolveLocation(text) {
   const res = await callApi(state.config, 'resolveLocation', { text });
   return res.location;

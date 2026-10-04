@@ -8,7 +8,7 @@ Setup is split in two: what Claude has done (or can do when asked), and what onl
 
 | What | Where |
 |---|---|
-| Added the app's columns to the trip Sheet (ID, Lat/Lng, Last edited by, Address on Restaurant ideas, Household on People, City Lat/Lng on Lists) and city coordinates | The trip Sheet |
+| Added the app's columns to the trip Sheet (ID, Lat/Lng, Last edited by, Attachment on Stays/Transport/Reservations, Address on Restaurant ideas, Household on People, City Lat/Lng on Lists) and city coordinates | The trip Sheet |
 | Wrote the app, the Apps Script (`apps-script/Code.gs`), tests and this documentation | This repository |
 | Pushed the code to this public repository (which you created) as one clean commit: code, a made-up test family and trip, no real names, dates, emails or secrets | GitHub |
 | Set up automatic testing and publishing: every push to `main` runs the tests, then publishes the app to GitHub Pages | `.github/workflows/pages.yml` |
@@ -40,7 +40,7 @@ About 20 minutes. Do them in this order.
 3. Google asks you to authorize the script once:
    - Choose your account.
    - "Google hasn't verified this app" → **Advanced** → **Go to Trip app (unsafe)**. It is your own script; the warning appears for every personal script.
-   - **Allow**. The script asks to edit *this* spreadsheet only, connect to external services (to expand short Google Maps links) and run when you are not present (for step 4).
+   - **Allow**. The script asks to edit *this* spreadsheet only, see and manage only the Drive files it creates itself (uploaded bookings), connect to external services (Claude, and short Google Maps links) and run when you are not present (for step 4).
 4. Run **Trip app → Set up the administrator (you)…** again if the prompts didn't appear. Enter **your email**, **your name** (as in the People tab) and **a PIN of 8 to 12 digits** that only you know.
 
 Only someone who can open the Sheet's menu (only you) can create or replace the administrator. Nobody can make another administrator from the app.
@@ -48,6 +48,19 @@ Only someone who can open the Sheet's menu (only you) can create or replace the 
 ### 4. Turn on automatic location filling (1 min)
 
 **Trip app → Turn on automatic location filling.** Every 15 minutes the script gives new rows an ID and looks up map coordinates for addresses typed into the Sheet.
+
+### 4b. Optional: let the app read bookings with Claude (5 min)
+
+The **+ → Import from a file or pasted text** button sends a confirmation email, PDF or screenshot to Claude, which fills in the forms. It needs an Anthropic API key, which is paid per use: roughly 2–10 US cents per document. Skip this step and the button tells people it is not turned on.
+
+1. Go to https://console.anthropic.com, sign in or create an account, add a payment method.
+2. **Settings → Limits**: set a low **monthly spend limit** (for example $10).
+3. **API keys → Create key**, name it "Trip app", copy it (starts with `sk-ant-`).
+4. In the Sheet: **Trip app → Set the Claude API key (reading bookings)…**, paste it, OK.
+
+The key stays in the script's settings; it is never sent to phones. Each person can read up to 40 documents a day. **Trip app → Turn off reading bookings with Claude** removes the key.
+
+Uploaded files are kept in a Drive folder named **Trip app uploads**, created the first time someone keeps a file. It is shared with nobody; family members open files through the app. Move that folder into your **Claude** folder when it appears (the app keeps working after the move).
 
 ### 5. Publish the script as a web app (3 min)
 
@@ -97,4 +110,7 @@ On one iPhone and one Android phone: install, sign in, add a note, turn on airpl
 | You forgot the administrator PIN | Run **Trip app → Set up the administrator (you)…** again in the Sheet. |
 | Rows typed in the Sheet have no map pin | **Trip app → Fill IDs and map locations now**, or paste a Google Maps link into the row's location in the app. |
 | You changed `Code.gs` but nothing changed | Deploy a **New version** (step 5). |
+| "Reading bookings is not turned on yet" | Do step 4b. |
+| "The Claude API key in the Sheet is not working" | Make a new key in the Anthropic console and set it again (step 4b). Also check the account has credit. |
+| After updating the script, Google asks for permission again | Expected when the script needs a new permission (for example Drive for uploads). Allow it, then deploy a new version. |
 | The app didn't update after a push | Check the Actions tab is green; then on the phone tap **Reload** on the "new version" banner. |
