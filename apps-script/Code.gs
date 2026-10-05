@@ -95,8 +95,8 @@ function doPost(e) {
       case 'ping':
         return json_({ ok: true });
       case 'read':
-        fillMissing_(5);
-        return json_({ ok: true, me: publicUser_(me), data: readAll_() });
+        // Fast: no map lookups here (the 15-minute trigger and saves do those); rows only get missing IDs
+        return json_({ ok: true, me: publicUser_(me), data: readAll_({ fillIds: true }) });
       case 'upsert':
         return json_(withLock_(function () {
           var row = upsert_(req.tab, req.key, req.values || {}, editor);
@@ -418,7 +418,7 @@ function withLock_(fn) {
 /* Reading                                                             */
 /* ------------------------------------------------------------------ */
 
-function readAll_() {
+function readAll_(opts) {
   var ss = SpreadsheetApp.getActive();
   var tz = ss.getSpreadsheetTimeZone();
   var out = { tabs: {}, lists: readLists_(ss), serverTime: new Date().toISOString(), sheetUrl: ss.getUrl(), trip: tripDates_() };
@@ -426,9 +426,30 @@ function readAll_() {
     var sh = ss.getSheetByName(name);
     if (!sh) return;
     var t = readTab_(sh, tz);
+    if (opts && opts.fillIds) fillIds_(name, sh, t);
     out.tabs[name] = { headers: t.headers, rows: t.rows };
   });
   return out;
+}
+
+/** Gives rows typed or pasted into the Sheet (e.g. by another tool) an ID, so the app can edit them in place. */
+function fillIds_(tab, sh, t) {
+  var cfg = TABS[tab];
+  var col = t.headers.indexOf('ID');
+  if (!cfg.prefix || col < 0) return;
+  var missing = t.rows.filter(function (r) { return !r.ID; });
+  if (!missing.length) return;
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(3000)) return;
+  try {
+    missing.forEach(function (r) {
+      if (String(sh.getRange(r._row, col + 1).getValue()).trim()) return; // filled meanwhile
+      r.ID = newId_(cfg.prefix);
+      sh.getRange(r._row, col + 1).setValue(r.ID);
+    });
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function readTab_(sh, tz) {

@@ -4,7 +4,7 @@ Open decisions and things that could not be verified while building the app. Iti
 
 ## For the trip organizer to do
 
-- [ ] **Update the Sheet's script again** (needed for Settings → Trip dates): paste the new `apps-script/Code.gs`, Save, then Deploy → Manage deployments → pencil → New version → Deploy.
+- [ ] **Update the Sheet's script again** (needed for Settings → Trip dates, and for faster syncs): paste the new `apps-script/Code.gs`, Save, then Deploy → Manage deployments → pencil → New version → Deploy.
 - [ ] **Update the Sheet's script** (needed for the Ideas tab): paste the new `apps-script/Code.gs` and `apps-script/appsscript.json` into Extensions → Apps Script, Save, then Deploy → Manage deployments → pencil → New version → Deploy. Then Trip app → Fill IDs and map locations now (repeat until all ideas have pins; it does about 100 per run).
 - [x] Turn on GitHub Pages (done; the app is published).
 - [x] Build the web app address into the app (GitHub variable TRIP_SCRIPT_URL; done).

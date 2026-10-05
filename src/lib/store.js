@@ -33,6 +33,7 @@ function emit() { listeners.forEach((fn) => fn(state)); }
 function rebuild() {
   const data = state.data ? applyQueue(state.data, state.queue) : null;
   state.model = buildModel(data);
+  state.modelVersion = (state.modelVersion || 0) + 1; // views redraw only when this (or date, filters, weather) changes
   // Until someone picks a date, follow the trip: today during it, its first day before it
   if (!state.date || state.dateAuto) {
     state.date = defaultDate(state.model, jpNow().date);
@@ -81,6 +82,11 @@ let syncPromise = null;
 export function sync({ force = false } = {}) {
   if (syncPromise) return syncPromise;
   if (!state.config.url || !state.config.token) return Promise.resolve();
+  // Offline: don't wait on a request that cannot succeed; the app runs from the device's copy
+  if (!navigator.onLine) {
+    if (state.error?.code !== 'offline') { state.error = { code: 'offline' }; emit(); }
+    return Promise.resolve();
+  }
   const started = epoch;
   syncPromise = (async () => {
     state.syncing = true;
@@ -193,6 +199,7 @@ export function refreshWeatherNow() {
       fetchJson: (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }),
     });
     if (started !== epoch) return;
+    state.weatherVersion = (state.weatherVersion || 0) + 1;
     set('weather', state.weather).catch(() => {});
     emit();
   }, 50);

@@ -366,3 +366,17 @@ describe('Apps Script API: trip dates', () => {
     expect(g.post({ action: 'adminSetTripDates', token, start: '', end: '' }).data.trip).toEqual({});
   });
 });
+
+describe('Apps Script API: fast reads', () => {
+  it('gives rows typed into the Sheet an ID on read, without slow map lookups', () => {
+    const g = createGas();
+    const token = g.login(admin);
+    g.ss.getSheetByName('Ideas').cells.push(['Typed by another tool', 'Otaru', '', 'Restaurant']);
+    const before = g.calls.geocode;
+    const row = g.post({ action: 'read', token }).data.tabs.Ideas.rows.find((r) => r.Name === 'Typed by another tool');
+    expect(row.ID).toMatch(/^I-[0-9a-f]{8}$/);
+    expect(g.calls.geocode).toBe(before);
+    // The ID is stored, so the next read sees the same one
+    expect(g.post({ action: 'read', token }).data.tabs.Ideas.rows.find((r) => r.Name === 'Typed by another tool').ID).toBe(row.ID);
+  });
+});

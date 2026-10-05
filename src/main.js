@@ -42,6 +42,8 @@ const mapFab = h('button', { class: 'fab fab-map', 'aria-label': 'Trip map', onc
 document.body.append(fab, mapFab);
 
 let conflicts = [];
+let conflictsFor = -1;
+let lastPaneKey = '';
 
 /* Settings open in a dialog over the current view; the gear (or #settings link) toggles it. */
 let settingsDlg = null;
@@ -113,7 +115,8 @@ function render() {
   if (view === 'setup' && settingsDlg) settingsDlg.close();
   document.body.dataset.view = view;
   if (VIEWS.some(([id]) => id === view)) lastView = view;
-  conflicts = findConflicts(state.model);
+  // Issue checks run once per change of the trip data, not on every redraw
+  if (conflictsFor !== state.modelVersion) { conflicts = findConflicts(state.model); conflictsFor = state.modelVersion; }
   renderChrome(view);
   fab.classList.toggle('hidden', view === 'setup' || (view === 'map' && !isDesktop()) || needsSetup());
   mapFab.classList.toggle('hidden', !(view === 'month' || view === 'map') || needsSetup()); // the trip map opens from the Month view
@@ -121,8 +124,12 @@ function render() {
   mapFab.setAttribute('aria-label', view === 'map' ? 'Close the map' : 'Trip map');
   mapFab.replaceChildren(icon(view === 'map' ? 'close' : 'map', 24));
 
-  // Don't redraw a form someone is typing in
-  const typing = paneMain.contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+  // Don't redraw a form someone is typing in, nor a view whose content has not changed
+  // (a sync starting or ending, or the online state, only changes the top bar)
+  const paneKey = [view, state.modelVersion, state.date, JSON.stringify(state.filters), state.weatherVersion, state.failedOps.length, state.error?.code || '', isDesktop(), state.config.me?.role || ''].join('|');
+  const typingNow = paneMain.contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+  const typing = typingNow || paneKey === lastPaneKey;
+  if (!typingNow) lastPaneKey = paneKey; // a redraw held back while typing still happens afterwards
   const errorBanner = state.error && !['offline', 'revoked', 'bad_session'].includes(state.error.code) ? h('div', { class: 'banner error', role: 'alert' }, h('div', null, ERROR_TEXT[state.error.code] || state.error.message || 'Sync failed.', ' ', h('button', { class: 'link', onclick: () => toggleSettings() }, 'Settings'))) : null;
 
   if (view === 'setup') {
