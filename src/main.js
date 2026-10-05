@@ -3,7 +3,7 @@ import { applyTheme } from './lib/theme.js';
 
 applyTheme();
 import { h, icon, clear, toast, sheet } from './ui/dom.js';
-import { state, subscribe, init, sync, setConfig } from './lib/store.js';
+import { state, subscribe, init, sync, setConfig, applyPendingUpdate } from './lib/store.js';
 import { findConflicts } from './lib/conflicts.js';
 import { activeFilterCount } from './lib/filters.js';
 import { ago, fmtJstStamp } from './lib/dates.js';
@@ -22,7 +22,10 @@ const VIEWS = [
 ];
 
 const app = document.getElementById('app');
-const syncPill = h('button', { class: 'sync-pill', 'aria-live': 'polite', onclick: () => sync() });
+const syncPill = h('button', { class: 'sync-pill', 'aria-live': 'polite', onclick: () => sync({ apply: true }) });
+// Someone else changed the trip while this person was using the app: offer it, don't redraw under them
+const updateBar = h('div', { class: 'update-bar', role: 'status', hidden: true },
+  h('span', null, 'The trip was updated.'), h('button', { class: 'btn small primary', onclick: () => applyPendingUpdate() }, 'Show changes'));
 const filterBtn = h('button', { class: 'icon-btn', 'aria-label': 'Filters', onclick: openFilters }, icon('filter'));
 const topNav = h('nav', { class: 'top-nav', 'aria-label': 'Views' });
 const bottomNav = h('nav', { class: 'bottom', 'aria-label': 'Views' });
@@ -33,6 +36,7 @@ let lastView = 'day';
 const paneMain = h('section', { class: 'pane pane-main', 'aria-live': 'off' });
 const paneMap = h('section', { class: 'pane pane-map' });
 const fab = h('button', { class: 'fab', 'aria-label': 'Add to the trip', onclick: openAddMenu }, icon('plus', 26));
+document.body.append(updateBar);
 app.append(header, h('main', null, paneMain, paneMap), bottomNav);
 // Floating Map button: opens the whole-trip map; tapped again on the map, it goes back
 const mapFab = h('button', { class: 'fab fab-map', 'aria-label': 'Trip map', onclick: () => {
@@ -44,6 +48,7 @@ document.body.append(fab, mapFab);
 let conflicts = [];
 let conflictsFor = -1;
 let lastPaneKey = '';
+let shownTrip = false;
 
 /* Settings open in a dialog over the current view; the gear (or #settings link) toggles it. */
 let settingsDlg = null;
@@ -118,6 +123,7 @@ function render() {
   // Issue checks run once per change of the trip data, not on every redraw
   if (conflictsFor !== state.modelVersion) { conflicts = findConflicts(state.model); conflictsFor = state.modelVersion; }
   renderChrome(view);
+  updateBar.hidden = !state.pendingData || view === 'setup';
   fab.classList.toggle('hidden', view === 'setup' || (view === 'map' && !isDesktop()) || needsSetup());
   mapFab.classList.toggle('hidden', !(view === 'month' || view === 'map') || needsSetup()); // the trip map opens from the Month view
   mapFab.setAttribute('aria-pressed', String(view === 'map'));
@@ -128,7 +134,11 @@ function render() {
   // (a sync starting or ending, or the online state, only changes the top bar)
   const paneKey = [view, state.modelVersion, state.date, JSON.stringify(state.filters), state.weatherVersion, state.failedOps.length, state.error?.code || '', isDesktop(), state.config.me?.role || ''].join('|');
   const typingNow = paneMain.contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
-  const typing = typingNow || paneKey === lastPaneKey;
+  // Once the trip has been shown, never swap it for an empty "Loading" screen while signed in
+  const holdEmpty = !state.data && shownTrip && view !== 'setup';
+  if (state.data) shownTrip = true;
+  if (view === 'setup') shownTrip = false;
+  const typing = typingNow || holdEmpty || paneKey === lastPaneKey;
   if (!typingNow) lastPaneKey = paneKey; // a redraw held back while typing still happens afterwards
   const errorBanner = state.error && !['offline', 'revoked', 'bad_session'].includes(state.error.code) ? h('div', { class: 'banner error', role: 'alert' }, h('div', null, ERROR_TEXT[state.error.code] || state.error.message || 'Sync failed.', ' ', h('button', { class: 'link', onclick: () => toggleSettings() }, 'Settings'))) : null;
 
@@ -168,7 +178,7 @@ matchMedia('(min-width: 1000px)').addEventListener('change', render);
 
 init().then(() => {
   render();
-  sync();
+  sync({ apply: true });
   setInterval(() => { if (document.visibilityState === 'visible') sync(); }, 5 * 60 * 1000);
   setInterval(() => renderChrome(route()), 60 * 1000); // keep "synced x min ago" fresh
 });

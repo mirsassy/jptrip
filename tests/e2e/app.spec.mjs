@@ -590,6 +590,32 @@ test('day view items show type, place, people and a Google Maps link, not notes'
   await expect(row.getByRole('link', { name: /Apple Maps/ })).toHaveCount(0);
 });
 
+test('someone else\'s change waits behind "Show changes" instead of redrawing under the person', async ({ page, context }) => {
+  await open(page, context);
+  await page.getByRole('button', { name: /Fri, Mar 8/ }).click();
+  await expect(page.getByText('Seafood dinner', { exact: true })).toBeVisible();
+  await api({ action: 'upsert', tab: 'Reservations', values: { ID: 'R-1', Name: 'Seafood feast' } });
+  await page.evaluate(() => window.dispatchEvent(new Event('online'))); // a background sync
+  const bar = page.getByRole('status').filter({ hasText: 'The trip was updated.' });
+  await expect(bar).toBeVisible();
+  await expect(page.getByText('Seafood dinner', { exact: true })).toBeVisible(); // not changed yet
+  await bar.getByRole('button', { name: 'Show changes' }).click();
+  await expect(page.getByText('Seafood feast', { exact: true })).toBeVisible();
+  await expect(bar).toBeHidden();
+});
+
+test('if the browser loses its saved copy, the app still opens with the trip (backup copy)', async ({ page, context }) => {
+  await open(page, context);
+  await expect(page.locator('.pane-main')).toContainText('Sapporo');
+  // IndexedDB gone (as iOS sometimes does), and the Sheet unreachable
+  await page.evaluate(() => new Promise((r) => { const q = indexedDB.deleteDatabase('keyval-store'); q.onsuccess = q.onerror = q.onblocked = () => r(); }));
+  await context.route(`${API}/**`, (r) => r.abort());
+  await context.route(API, (r) => r.abort());
+  await page.reload();
+  await expect(page.locator('.pane-main')).toContainText('Sapporo');
+  await expect(page.locator('.pane-main')).not.toContainText('Loading the trip');
+});
+
 test('a change made directly in the Sheet shows up after sync', async ({ page, context }) => {
   await open(page, context);
   await api({ action: 'upsert', tab: 'Notes', values: { ID: 'N-sheet', Date: '2030-03-04', City: 'Sapporo', Who: 'Everyone', Note: 'Typed in the Sheet' } });

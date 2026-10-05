@@ -348,3 +348,7 @@ body[data-view="setup"] .sync-pill, body[data-view="setup"] header .icon-btn, bo
 .map-controls .map-filters { flex-direction: column; align-items: stretch; gap: 4px; padding: 10px; max-height: 50vh; overflow-y: auto; }
 .map-filters[hidden] { display: none; }
 .idea-why { color: var(--text); opacity: .85; }
+/* "The trip was updated" bar: pinned under the top bar, never moves the page */
+.update-bar { position: fixed; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top) + 64px); z-index: 40; display: flex; gap: 12px; align-items: center;
+  background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 999px; padding: 6px 6px 6px 16px; box-shadow: 0 4px 14px rgba(0,0,0,.18); font-size: .9rem; white-space: nowrap; }
+.update-bar[hidden] { display: none; }

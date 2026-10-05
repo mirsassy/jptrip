@@ -111,5 +111,6 @@ export async function refreshWeather(cache, locs, range, { fetchJson, now = Date
     }
   });
   await Promise.all(tasks);
+  cache.fetched = tasks.length; // how many downloads this call made (0 = nothing new)
   return cache;
 }

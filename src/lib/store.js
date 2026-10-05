@@ -48,12 +48,20 @@ export async function init() {
     state.lastSynced = lastSynced || 0;
     state.queue = queue || [];
     state.weather = weather || {};
-  } catch { /* IndexedDB unavailable (private mode): run from memory */ }
+  } catch { /* IndexedDB unavailable or lost (iOS can drop it after the app was in the background) */ }
+  // Backup copy: if IndexedDB came back empty, use the one kept in localStorage
+  if (!state.data) {
+    try {
+      const b = JSON.parse(localStorage.getItem(BACKUP_KEY) || 'null');
+      if (b?.data) { state.data = b.data; state.lastSynced = b.lastSynced || 0; if (!state.queue.length) state.queue = b.queue || []; }
+    } catch { /* no backup */ }
+  }
   rebuild();
   emit();
   window.addEventListener('online', () => { state.online = true; emit(); sync(); });
   window.addEventListener('offline', () => { state.online = false; emit(); });
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sync(); });
+  // Coming back to the app is like opening it: show the latest at once
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sync({ apply: true }); });
 }
 
 export function setConfig(c) {
@@ -74,12 +82,39 @@ export function setDate(d) {
   emit();
 }
 
-const persist = (since = epoch) => (since !== epoch ? Promise.resolve()
-  : Promise.all([set('data', state.data), set('lastSynced', state.lastSynced), set('queue', state.queue)]).catch(() => {}));
+const BACKUP_KEY = 'trip.backup.v1';
+const persist = (since = epoch) => {
+  if (since !== epoch) return Promise.resolve();
+  // A second copy in localStorage, in case the browser loses IndexedDB (a known iOS issue)
+  try { if (state.data) localStorage.setItem(BACKUP_KEY, JSON.stringify({ data: state.data, queue: state.queue, lastSynced: state.lastSynced })); } catch { /* full: IndexedDB still has it */ }
+  return Promise.all([set('data', state.data), set('lastSynced', state.lastSynced), set('queue', state.queue)]).catch(() => {});
+};
+
+/** Same trip content (ignores the server's timestamp). */
+function sameTrip(a, b) {
+  if (!a || !b) return false;
+  return JSON.stringify({ ...a, serverTime: 0 }) === JSON.stringify({ ...b, serverTime: 0 });
+}
+
+/** Shows the changes someone else made, held back while the app was in use. */
+export function applyPendingUpdate() {
+  if (!state.pendingData) return;
+  state.data = state.pendingData;
+  state.pendingData = null;
+  persist();
+  rebuild();
+  emit();
+  refreshWeatherNow();
+}
 
 let syncPromise = null;
 /** Sends queued edits in order, then reads the whole Sheet. */
-export function sync({ force = false } = {}) {
+/**
+ * `apply`: show what the Sheet sends right away (opening the app, tapping sync, after your own
+ * edits). Otherwise (background syncs) someone else's changes wait behind a "Show changes" banner,
+ * so the screen never changes under the person using it.
+ */
+export function sync({ apply = false } = {}) {
   if (syncPromise) return syncPromise;
   if (!state.config.url || !state.config.token) return Promise.resolve();
   // Offline: don't wait on a request that cannot succeed; the app runs from the device's copy
@@ -91,6 +126,7 @@ export function sync({ force = false } = {}) {
   syncPromise = (async () => {
     state.syncing = true;
     emit();
+    let changed = false;
     try {
       while (state.queue.length) {
         const op = state.queue[0];
@@ -98,6 +134,7 @@ export function sync({ force = false } = {}) {
           const res = await callApi(state.config, op.action, op.payload);
           if (started !== epoch) return;
           if (res.data) state.data = res.data;
+          changed = true;
         } catch (e) {
           if (e instanceof ApiError && (e.code === 'server_error' || e.code === 'bad_request' || e.code === 'unknown_action')) {
             state.failedOps.push({ ...op, error: e.message });
@@ -106,11 +143,15 @@ export function sync({ force = false } = {}) {
           }
         }
         state.queue.shift();
+        changed = true;
         await persist(started);
       }
       const res = await callApi(state.config, 'read');
       if (started !== epoch) return;
-      state.data = res.data;
+      if (!sameTrip(state.data, res.data)) {
+        if (!state.data || apply || changed) { state.data = res.data; state.pendingData = null; changed = true; }
+        else state.pendingData = res.data;
+      } else state.pendingData = null;
       if (res.me && JSON.stringify(res.me) !== JSON.stringify(state.config.me)) setConfig({ me: res.me });
       state.lastSynced = Date.now();
       state.error = null;
@@ -129,9 +170,9 @@ export function sync({ force = false } = {}) {
     } finally {
       state.syncing = false;
       syncPromise = null;
-      rebuild();
+      if (changed || !state.data) rebuild(); // unchanged data: keep the same model, so views don't redraw
       emit();
-      refreshWeatherNow();
+      refreshWeatherNow(); // fetches only what is missing or stale
     }
   })();
   return syncPromise;
@@ -198,7 +239,7 @@ export function refreshWeatherNow() {
     await refreshWeather(state.weather, locs, m.range, {
       fetchJson: (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }),
     });
-    if (started !== epoch) return;
+    if (started !== epoch || !state.weather.fetched) return; // nothing new: no redraw
     state.weatherVersion = (state.weatherVersion || 0) + 1;
     set('weather', state.weather).catch(() => {});
     emit();
@@ -248,10 +289,10 @@ export async function eraseThisDevice({ keepUrl = false } = {}) {
   epoch++;
   clearTimeout(wxTimer);
   const url = state.config.url;
-  ['trip.config.v1', 'trip.filters.v1', 'trip.dayMode', 'trip.dayMode2'].forEach((k) => { try { localStorage.removeItem(k); } catch { /* ignore */ } });
+  ['trip.config.v1', 'trip.filters.v1', 'trip.dayMode', 'trip.dayMode2', BACKUP_KEY].forEach((k) => { try { localStorage.removeItem(k); } catch { /* ignore */ } });
   try { await clearIdb(); } catch { /* ignore */ }
   try { if ('caches' in window) await caches.delete('map-tiles'); } catch { /* ignore */ }
-  Object.assign(state, { config: keepUrl && url ? { url } : {}, filters: loadFilters(), data: null, lastSynced: 0, queue: [], failedOps: [], weather: {}, date: null, dateAuto: true });
+  Object.assign(state, { config: keepUrl && url ? { url } : {}, filters: loadFilters(), data: null, pendingData: null, lastSynced: 0, queue: [], failedOps: [], weather: {}, date: null, dateAuto: true });
   if (keepUrl && url) saveConfig(state.config);
   rebuild();
   emit();
