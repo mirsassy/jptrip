@@ -127,8 +127,6 @@ export const ERROR_TEXT = {
   file_too_big: 'That file is too big. Files up to 8 MB work; try a screenshot of the important page.',
   file_type: 'That kind of file can’t be read. Use a PDF, a photo or screenshot, or paste the text.',
   nothing_to_read: 'Paste some text or choose a file first.',
-  no_attachment: 'That file is no longer available.',
-  not_yours: 'Only the person who uploaded the file (or the trip organizer) can remove it.',
   bad_response: 'The Sheet sent an unexpected reply. Check the Apps Script URL in Settings.',
   server_error: 'The Sheet reported an error.',
 };

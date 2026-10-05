@@ -11,8 +11,8 @@
  * owner can create it); the administrator adds and removes everyone else from
  * the app. PINs and tokens are stored only as SHA-256 hashes in Script Properties.
  *
- * Permissions (appsscript.json): this spreadsheet only; Drive files the script itself
- * creates (uploads), never the rest of the Drive; outside requests (Claude, short map links).
+ * Permissions (appsscript.json): this spreadsheet only, and outside requests (Claude,
+ * short map links). Uploaded files are read, never stored.
  *
  * @OnlyCurrentDoc  Limits this script to the spreadsheet it is attached to.
  */
@@ -22,7 +22,7 @@ var TABS = {
   'Stays': { key: 'ID', prefix: 'S' },
   'Transport': { key: 'ID', prefix: 'T' },
   'Reservations': { key: 'ID', prefix: 'R' },
-  'Restaurant ideas': { key: 'ID', prefix: 'I' },
+  'Ideas': { key: 'ID', prefix: 'I' },
   'Notes': { key: 'ID', prefix: 'N' }
 };
 var LISTS_TAB = 'Lists';
@@ -38,7 +38,7 @@ var NUMBER_COLS = ['Lat', 'Lng', 'From Lat', 'From Lng', 'To Lat', 'To Lng', 'Ci
 var GEO = {
   'Stays': [{ lat: 'Lat', lng: 'Lng', address: 'Address', name: ['Hotel', 'City'], needName: 'Hotel' }],
   'Reservations': [{ lat: 'Lat', lng: 'Lng', address: 'Address', name: ['Name', 'City'], needName: 'Name' }],
-  'Restaurant ideas': [{ lat: 'Lat', lng: 'Lng', address: 'Address', name: ['Name', 'City'], needName: 'Name' }],
+  'Ideas': [{ lat: 'Lat', lng: 'Lng', address: 'Address', name: ['Name', 'Area', 'City'], needName: 'Name' }],
   'Transport': [
     { lat: 'From Lat', lng: 'From Lng', name: ['From'], needName: 'From', skipIfCity: 'From' },
     { lat: 'To Lat', lng: 'To Lng', name: ['To'], needName: 'To', skipIfCity: 'To' }
@@ -64,7 +64,6 @@ var CLAUDE_MODEL = 'claude-opus-5-5';
 var CLAUDE_DAILY_LIMIT = 40;              // documents read per person per day
 var UPLOAD_MAX_BYTES = 8 * 1024 * 1024;   // largest file the app may upload
 var TEXT_MAX_CHARS = 100000;              // longest pasted text
-var UPLOAD_FOLDER_NAME = 'Trip app uploads';
 var CLAUDE_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
 /* ------------------------------------------------------------------ */
@@ -117,10 +116,6 @@ function doPost(e) {
         return json_({ ok: true, location: resolveLocation_(String(req.text || '')) });
       case 'extract':
         return json_(extract_(req, me));
-      case 'attachment':
-        return json_(getAttachment_(String(req.id || '')));
-      case 'discardUpload':
-        return json_(discardUpload_(String(req.id || ''), me));
       case 'changePin':
         return json_(withLock_(function () { return changePin_(me.email, req.currentPin, req.newPin, auth.tokenHash); }));
       case 'logout':
@@ -587,19 +582,20 @@ function newId_(prefix) {
 
 function moveIdea_(ideaId, reservation, editor) {
   var ss = SpreadsheetApp.getActive();
-  var ideas = ss.getSheetByName('Restaurant ideas');
+  var ideas = ss.getSheetByName('Ideas');
   var headers = headerRow_(ideas);
   var rowIdx = findRow_(ideas, headers.indexOf('ID'), ideaId);
   if (rowIdx < 0) throw new Error('Idea not found: ' + ideaId);
   var idea = readRowObject_(ideas, headers, rowIdx, ss.getSpreadsheetTimeZone());
 
+  var source = String(idea['Source'] || '');
   var res = {
-    'Type': 'Restaurant',
+    'Type': idea['Type'] || 'Restaurant',
     'Name': idea['Name'],
     'City': idea['City'],
     'Address': idea['Address'],
     'Kid-friendly': idea['Kid-friendly'],
-    'Link': idea['Link'],
+    'Link': /^https?:\/\//.test(source) ? source : '',
     'Status': 'Tentative',
     'Lat': idea['Lat'],
     'Lng': idea['Lng']
@@ -609,7 +605,7 @@ function moveIdea_(ideaId, reservation, editor) {
 
   var note = idea['Notes'] ? idea['Notes'] + ' | ' : '';
   var stamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
-  upsert_('Restaurant ideas', ideaId, { 'Status': 'Confirmed', 'Notes': note + 'Moved to Reservations ' + stamp }, editor);
+  upsert_('Ideas', ideaId, { 'Status': 'Confirmed', 'Notes': note + 'Moved to Reservations ' + stamp }, editor);
 }
 
 /** Appends a value to a column of the Lists tab (e.g. a new City), optionally with City Lat / City Lng. */
@@ -704,15 +700,7 @@ function extract_(req, me) {
 
   var res = callClaude_(key, text, readable ? file : null, req.hints || {});
   if (res.error) return { ok: false, error: res.error, message: res.message };
-  var out = { ok: true, items: res.items, warnings: res.warnings };
-  if (file && req.keep) {
-    try {
-      out.attachment = saveUpload_(file, bytes, me);
-    } catch (err) {
-      out.warnings.push('The file could not be kept in Drive (' + String(err.message || err).slice(0, 120) + '). The bookings can still be added.');
-    }
-  }
-  return out;
+  return { ok: true, items: res.items, warnings: res.warnings };
 }
 
 function extractPrompt_(text, hasFile, hints) {
@@ -775,90 +763,6 @@ function callClaude_(key, text, file, hints) {
   var parsed;
   try { parsed = JSON.parse(texts[texts.length - 1].text); } catch (err) { return { error: 'ai_failed', message: 'Unreadable answer.' }; }
   return { items: Array.isArray(parsed.items) ? parsed.items.slice(0, 50) : [], warnings: Array.isArray(parsed.warnings) ? parsed.warnings.map(String).slice(0, 20) : [] };
-}
-
-/*
- * Uploaded files go to a "Trip app uploads" folder in the Sheet owner's Drive, through
- * the Drive API with the drive.file permission: the script can see only files it
- * created itself, never the rest of the Drive. Family members open a file through the
- * app (action "attachment"), which serves only files inside that folder.
- */
-function driveFetch_(url, opts) {
-  opts = opts || {};
-  opts.headers = { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() };
-  opts.muteHttpExceptions = true;
-  var r = UrlFetchApp.fetch(url, opts);
-  if (r.getResponseCode() >= 300) throw new Error('Drive replied ' + r.getResponseCode());
-  return r;
-}
-
-function uploadsFolderId_() {
-  var props = PropertiesService.getScriptProperties();
-  var id = props.getProperty('UPLOAD_FOLDER_ID');
-  if (id) {
-    try {
-      var f = JSON.parse(driveFetch_('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id) + '?fields=id,trashed').getContentText());
-      if (!f.trashed) return id;
-    } catch (err) { /* deleted: make a new one */ }
-  }
-  var created = JSON.parse(driveFetch_('https://www.googleapis.com/drive/v3/files?fields=id', {
-    method: 'post', contentType: 'application/json',
-    payload: JSON.stringify({ name: UPLOAD_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder', description: 'Files uploaded from the trip app. Shared with nobody; family members open them through the app.' })
-  }).getContentText());
-  props.setProperty('UPLOAD_FOLDER_ID', created.id);
-  return created.id;
-}
-
-function saveUpload_(file, bytes, me) {
-  var folder = uploadsFolderId_();
-  var stamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
-  var meta = JSON.parse(driveFetch_('https://www.googleapis.com/drive/v3/files?fields=id', {
-    method: 'post', contentType: 'application/json',
-    payload: JSON.stringify({ name: stamp + ' ' + file.name, mimeType: file.mimeType || 'application/octet-stream', parents: [folder], appProperties: { uploadedBy: me.email }, description: 'Uploaded by ' + me.name + ' from the trip app' })
-  }).getContentText());
-  driveFetch_('https://www.googleapis.com/upload/drive/v3/files/' + encodeURIComponent(meta.id) + '?uploadType=media', {
-    method: 'patch', contentType: file.mimeType || 'application/octet-stream',
-    payload: Utilities.newBlob(bytes, file.mimeType || 'application/octet-stream', file.name)
-  });
-  return 'https://drive.google.com/file/d/' + meta.id + '/view';
-}
-
-/** Drive file ID from an Attachment cell (a Drive link) or a bare ID. */
-function driveId_(s) {
-  var m = String(s).match(/\/file\/d\/([\w-]{10,})/) || String(s).match(/^([\w-]{10,})$/);
-  return m ? m[1] : null;
-}
-
-/** File metadata, only for files in the uploads folder (anything else reads as not found). */
-function uploadMeta_(s) {
-  var id = driveId_(s);
-  var folder = PropertiesService.getScriptProperties().getProperty('UPLOAD_FOLDER_ID');
-  if (!id || !folder) return null;
-  try {
-    var f = JSON.parse(driveFetch_('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id) + '?fields=id,name,mimeType,parents,trashed,size,appProperties').getContentText());
-    if (f.trashed || (f.parents || []).indexOf(folder) < 0) return null;
-    return f;
-  } catch (err) {
-    return null;
-  }
-}
-
-function getAttachment_(s) {
-  var f = uploadMeta_(s);
-  if (!f) return { ok: false, error: 'no_attachment' };
-  var bytes = driveFetch_('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(f.id) + '?alt=media').getBlob().getBytes();
-  return { ok: true, name: f.name, mimeType: f.mimeType, data: Utilities.base64Encode(bytes) };
-}
-
-/** Moves an upload to the Drive trash when the person added nothing from it. Only the uploader or the administrator can. */
-function discardUpload_(s, me) {
-  var f = uploadMeta_(s);
-  if (!f) return { ok: true };
-  if (me.role !== 'admin' && (f.appProperties || {}).uploadedBy !== me.email) return { ok: false, error: 'not_yours' };
-  driveFetch_('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(f.id), {
-    method: 'patch', contentType: 'application/json', payload: JSON.stringify({ trashed: true })
-  });
-  return { ok: true };
 }
 
 /* ------------------------------------------------------------------ */

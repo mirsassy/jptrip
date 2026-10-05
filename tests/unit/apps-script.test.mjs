@@ -215,14 +215,14 @@ describe('Apps Script API: data', () => {
     expect(typeof r.row['To Lat']).toBe('number');
   });
 
-  it('moves a restaurant idea to Reservations', () => {
+  it('moves an idea to Reservations, keeping its type and source link', () => {
     const g = createGasAs();
-    g.post({ action: 'upsert', token: C, tab: 'Restaurant ideas', values: { ID: 'I-1', Name: 'Ramen alley', City: 'Sapporo', 'Kid-friendly': 'Yes', Status: 'Idea' } });
+    g.post({ action: 'upsert', token: C, tab: 'Ideas', values: { ID: 'I-1', Name: 'Ramen alley', City: 'Sapporo', Type: 'Restaurant', 'Kid-friendly': 'Yes', Source: 'https://example.com/ramen', Status: 'Idea' } });
     const r = g.post({ action: 'moveIdea', token: C, ideaId: 'I-1', reservation: { ID: 'R-9', Date: '2030-03-04', Time: '12:00', Who: 'Everyone' } });
     expect(r.ok).toBe(true);
     const res = r.data.tabs.Reservations.rows[0];
-    expect(res).toMatchObject({ ID: 'R-9', Name: 'Ramen alley', City: 'Sapporo', 'Kid-friendly': 'Yes', Type: 'Restaurant', Status: 'Tentative', 'Last edited by': 'Avery' });
-    const idea = r.data.tabs['Restaurant ideas'].rows[0];
+    expect(res).toMatchObject({ ID: 'R-9', Name: 'Ramen alley', City: 'Sapporo', 'Kid-friendly': 'Yes', Type: 'Restaurant', Link: 'https://example.com/ramen', Status: 'Tentative', 'Last edited by': 'Avery' });
+    const idea = r.data.tabs.Ideas.rows[0];
     expect(idea.Status).toBe('Confirmed');
     expect(idea.Notes).toMatch(/^Moved to Reservations \d{4}-\d{2}-\d{2}$/);
   });
@@ -345,52 +345,11 @@ describe('Apps Script API: reading bookings with Claude', () => {
     expect(g.post({ action: 'extract', token: g.login(admin), text: 'x' }).ok).toBe(true);
   });
 
-  it('keeps the file in a private uploads folder only when asked, and serves it back', () => {
-    const g = setup();
-    const token = g.login(casey);
-    expect(g.post({ action: 'extract', token, file: pdf }).attachment).toBeUndefined();
-    expect(g.drive.size).toBe(0);
-    const r = g.post({ action: 'extract', token, file: pdf, keep: true });
-    expect(r.attachment).toMatch(/^https:\/\/drive\.google\.com\/file\/d\/[\w-]+\/view$/);
-    const folderId = g.props.get('UPLOAD_FOLDER_ID');
-    const folder = g.drive.get(folderId);
-    expect(folder).toMatchObject({ name: 'Trip app uploads', mimeType: 'application/vnd.google-apps.folder' });
-    const file = [...g.drive.values()].find((f) => f.parents?.includes(folderId));
-    expect(file).toMatchObject({ mimeType: 'application/pdf', appProperties: { uploadedBy: 'casey@example.com' } });
-    expect(file.name).toMatch(/hotel\.pdf$/);
-    // Anyone signed in can open it through the app
-    const a = g.post({ action: 'attachment', token: g.login(blake), id: r.attachment });
-    expect(a).toMatchObject({ ok: true, mimeType: 'application/pdf' });
-    expect(Buffer.from(a.data, 'base64').toString()).toBe('%PDF-1.4 fake');
-    // A second upload reuses the folder
-    g.post({ action: 'extract', token, file: pdf, keep: true });
-    expect([...g.drive.values()].filter((f) => f.mimeType === 'application/vnd.google-apps.folder')).toHaveLength(1);
-  });
-
-  it('serves only files inside the uploads folder', () => {
-    const g = setup();
-    const token = g.login(casey);
-    g.post({ action: 'extract', token, file: pdf, keep: true });
-    g.drive.set('otherfile12345', { id: 'otherfile12345', name: 'private.pdf', parents: ['root'], trashed: false, bytes: [1] });
-    expect(g.post({ action: 'attachment', token, id: 'https://drive.google.com/file/d/otherfile12345/view' }).error).toBe('no_attachment');
-    expect(g.post({ action: 'attachment', token, id: '../etc' }).error).toBe('no_attachment');
-    // The folder itself is not a file to serve
-    expect(g.post({ action: 'attachment', token, id: g.props.get('UPLOAD_FOLDER_ID') }).error).toBe('no_attachment');
-  });
-
-  it('lets only the uploader or the administrator discard an upload', () => {
+  it('never stores an uploaded file', () => {
     const g = setup();
     const r = g.post({ action: 'extract', token: g.login(casey), file: pdf, keep: true });
-    expect(g.post({ action: 'discardUpload', token: g.login(blake), id: r.attachment }).error).toBe('not_yours');
-    expect(g.post({ action: 'discardUpload', token: g.login(casey), id: r.attachment }).ok).toBe(true);
-    expect(g.post({ action: 'attachment', token: g.login(casey), id: r.attachment }).error).toBe('no_attachment');
-  });
-
-  it('stores the Attachment link on a row like any other field', () => {
-    const g = setup();
-    const token = g.login(casey);
-    const r = g.post({ action: 'extract', token, file: pdf, keep: true });
-    const up = g.post({ action: 'upsert', token, tab: 'Stays', values: { 'Check-in': '2030-03-05', 'Check-out': '2030-03-08', City: 'Otaru', Who: 'Casey', Attachment: r.attachment } });
-    expect(up.row.Attachment).toBe(r.attachment);
+    expect(r.ok).toBe(true);
+    expect(r.attachment).toBeUndefined();
+    expect(g.post({ action: 'attachment', token: g.login(casey), id: 'x' }).error).toBe('unknown_action');
   });
 });

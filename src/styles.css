@@ -285,3 +285,28 @@ body[data-view="setup"] .sync-pill, body[data-view="setup"] header .icon-btn, bo
 .mstays { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
 .mstays li { display: grid; grid-template-columns: 112px 1fr; gap: 8px; align-items: start; }
 .mstay-when { font-size: .85rem; color: var(--muted); }
+/* Ideas (cards on the Ideas tab and at the end of each day) */
+.idea { border-top: 1px solid var(--line); padding: 10px 0; }
+.idea:first-of-type { border-top: 0; }
+.idea-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.idea-title { font-weight: 600; }
+.idea-line { margin-top: 4px; }
+.idea-line.strong { color: var(--accent); }
+.idea.closed { opacity: .75; }
+.warn-text { color: var(--warn); font-weight: 600; }
+.chip.michelin { background: #b7282e; color: #fff; white-space: nowrap; }
+.chip.warn { background: color-mix(in srgb, var(--warn) 18%, var(--surface)); }
+.chip.muted { color: var(--muted); }
+.ideas-day summary { cursor: pointer; display: flex; gap: 8px; align-items: center; list-style: none; }
+.ideas-day summary::-webkit-details-marker { display: none; }
+.ideas-day summary::after { content: '▸'; margin-left: auto; color: var(--muted); }
+.ideas-day[open] summary::after { content: '▾'; }
+/* By plan */
+.plan-list { list-style: none; padding: 0; margin: 0; }
+.plan-list li { display: grid; grid-template-columns: 96px 1fr auto; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); align-items: start; }
+.plan-list li:first-child { border-top: 0; }
+.plan-list li.cancelled .ttl { text-decoration: line-through; color: var(--muted); }
+.plan-when { font-size: .85rem; text-align: left; }
+/* Booked plans draw above ideas on the map */
+.maplibregl-marker.pin { z-index: 2; }
+.maplibregl-marker.pin.idea { z-index: 1; }

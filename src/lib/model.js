@@ -3,8 +3,8 @@
 import { parseDate, parseTime, toMinutes, addDays, diffDays } from './dates.js';
 
 export const TYPES = ['stay', 'transport', 'reservation', 'note', 'idea'];
-export const TYPE_LABELS = { stay: 'Stay', transport: 'Transport', reservation: 'Reservation', note: 'Note', idea: 'Restaurant idea' };
-export const TAB_OF_TYPE = { stay: 'Stays', transport: 'Transport', reservation: 'Reservations', note: 'Notes', idea: 'Restaurant ideas' };
+export const TYPE_LABELS = { stay: 'Stay', transport: 'Transport', reservation: 'Reservation', note: 'Note', idea: 'Idea' };
+export const TAB_OF_TYPE = { stay: 'Stays', transport: 'Transport', reservation: 'Reservations', note: 'Notes', idea: 'Ideas' };
 export const STATUSES = ['Idea', 'Tentative', 'Confirmed', 'Cancelled'];
 export const RESERVATION_MINUTES = 120; // assumed length of a reservation for overlap checks
 const FALLBACK_COLORS = ['#1F77B4', '#FF7F0E', '#2CA02C', '#D62728', '#9467BD', '#8C564B', '#E377C2', '#17BECF', '#BCBD22', '#7F7F7F'];
@@ -202,16 +202,25 @@ export function buildModel(data) {
     items.push(it);
   });
 
-  rows('Restaurant ideas').forEach((r) => {
-    const it = base('Restaurant ideas', 'idea', r);
+  // Ideas tab (restaurants, activities…), written by people and by a research agent
+  rows('Ideas').forEach((r) => {
+    const it = base('Ideas', 'idea', r);
     it.people = [];
     it.city = norm(r.City);
     it.cities = [it.city].filter(Boolean);
-    it.title = norm(r.Name) || 'Restaurant idea';
-    it.cuisine = norm(r.Cuisine);
-    it.price = norm(r['Price range']);
+    it.title = norm(r.Name) || 'Idea';
+    it.area = norm(r.Area);
+    it.ideaType = norm(r.Type) || 'Other';
+    it.category = norm(r.Category);
+    it.michelin = norm(r.Michelin);
+    it.price = norm(r.Price);
+    it.kidRaw = norm(r['Kid-friendly']);
     it.kid = yesNo(r['Kid-friendly']);
-    it.link = norm(r.Link);
+    it.bestFor = norm(r['Best for']);
+    it.booking = norm(r.Reservation);
+    it.timing = norm(r['Timing / closed days']);
+    it.link = norm(r.Source);
+    it.verification = norm(r.Verification);
     it.address = norm(r.Address);
     it.loc = coordOr(r.Lat, r.Lng, it.city);
     items.push(it);

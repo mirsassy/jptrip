@@ -30,7 +30,8 @@ After 5 wrong PINs in a row the app waits 15 minutes before you can try again; a
 - **Day**: pick a date. Each card is a group sleeping in the same place that night, with times, bookings, notes and the weather. **By person** shows one card per person.
 - **Map**: where everyone is on the chosen day. Drag the slider to change days. Tap a pin for details and **Google Maps** / **Apple Maps** buttons.
 - **List**: every plan, by date.
-- **Ideas**: restaurant ideas. **Kid-friendly only** filters them. **Move to Reservations** turns an idea into a booking.
+- **Ideas**: restaurants and activities worth considering, by city, with price, Michelin, kid-friendliness, how to book and opening notes. Filter by type or **Kid-friendly only**. **Book** turns an idea into a reservation.
+- The **Day** view ends with **Ideas for this day** for the cities you're in, and warns when a place may be closed that day. **By plan** (top of Day) lists the whole trip by kind: travel, stays, restaurants, activities, notes.
 - **Issues**: things to fix, like a night with nowhere to sleep or two bookings at the same time.
 - **Filter** (funnel at the top): show only some people, cities, types or dates. Your filters are remembered.
 
@@ -44,7 +45,7 @@ Families are **groups** (see **Settings → Groups**). Children don't sign in: p
 
 ## Add or change something
 
-1. Tap the red **+** → choose **Reservation**, **Transport**, **Stay**, **Note** or **Restaurant idea**.
+1. Tap the red **+** → choose **Reservation**, **Transport**, **Stay**, **Note** or **Idea**.
 2. Fill in what you know. For **Who**, tap **Everyone** or tap people's names.
 3. Tap **Add**.
 
@@ -56,7 +57,7 @@ Families are **groups** (see **Settings → Groups**). Children don't sign in: p
 3. Tap **Read it** and wait up to a minute.
 4. For each booking found, tap **Check and add**: the form is filled in for you. Check the dates and times, choose **Who** is going, then tap **Add**.
 
-Leave **Keep a copy** ticked to keep the file with the booking: it opens from the booking's **File** link or form. What you import is sent to Claude (Anthropic) to be read, so leave out card and passport numbers. If the app says importing is not turned on, ask the trip organizer.
+What you import is sent to Claude (Anthropic) to be read; the file itself is not stored. Leave out card and passport numbers. If the app says importing is not turned on, ask the trip organizer.
 
 To change something, tap the pencil next to it. To cancel a booking, open it and tap **Cancel booking**: it stays on record as Cancelled. Your name is recorded on every change you make.
 

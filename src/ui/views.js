@@ -1,4 +1,4 @@
-// List, Restaurant ideas, Issues, Filters and Settings views.
+// List, Ideas, Issues, Filters and Settings views.
 import { h, icon, clear, sheet, toast } from './dom.js';
 import { state, setFilters, setDate, dismissFailed } from '../lib/store.js';
 import { renderSignIn, settingsCards } from './account.js';
@@ -7,6 +7,7 @@ import { TYPES, TYPE_LABELS, STATUSES, byTime } from '../lib/model.js';
 import { fmtDay } from '../lib/dates.js';
 import { whoChips, statusBadge, mapLinks, itemTimeLabel, TYPE_ICON, safeUrl } from './common.js';
 import { openEditor, openMoveIdea } from './forms.js';
+import { ideaCard } from './ideas.js';
 
 /* ---------------- List: everything that passes the filters, by date ---------------- */
 export function renderList(root) {
@@ -51,42 +52,40 @@ function filterSummary() {
     h('button', { class: 'link', onclick: () => setFilters({ ...DEFAULT_FILTERS }) }, 'Clear filters')));
 }
 
-/* ---------------- Restaurant ideas ---------------- */
+/* ---------------- Ideas ---------------- */
+let ideaType = '';
 export function renderIdeas(root) {
   clear(root);
   const m = state.model;
   const f = state.filters;
   const pass = makePass(m, { ...f, types: [] });
-  const ideas = m.items.filter((it) => it.type === 'idea' && pass(it)).sort((a, b) => a.city.localeCompare(b.city) || a.title.localeCompare(b.title));
+  const all = m.items.filter((it) => it.type === 'idea' && pass(it));
+  const types = [...new Set(m.items.filter((it) => it.type === 'idea').map((it) => it.ideaType))].sort();
+  const ideas = all.filter((it) => !ideaType || it.ideaType === ideaType)
+    .sort((a, b) => a.city.localeCompare(b.city) || a.ideaType.localeCompare(b.ideaType) || a.title.localeCompare(b.title));
   const citySel = h('select', { 'aria-label': 'City', onchange: (e) => setFilters({ cities: e.target.value ? [e.target.value] : [] }) },
     h('option', { value: '' }, 'All cities'), m.cities.map((c) => h('option', { value: c.name }, c.name)));
   citySel.value = f.cities.length === 1 ? f.cities[0] : '';
-  root.append(h('h2', { style: { margin: '4px 0 8px', fontSize: '1.15rem' } }, 'Restaurant ideas'),
+  root.append(h('h2', { style: { margin: '4px 0 8px', fontSize: '1.15rem' } }, 'Ideas'),
     h('div', { class: 'row', style: { marginBottom: '12px' } },
       h('div', { class: 'field', style: { margin: 0, minWidth: '150px' } }, citySel),
-      h('div', { class: 'toggle-chips' }, h('button', { 'aria-pressed': String(f.kidOnly), onclick: () => setFilters({ kidOnly: !f.kidOnly }) }, icon('kid', 16), 'Kid-friendly only')),
-      h('button', { class: 'btn small', onclick: () => openEditor('Restaurant ideas', null, { City: f.cities.length === 1 ? f.cities[0] : '' }) }, icon('plus', 16), 'Add idea')));
+      h('div', { class: 'toggle-chips' },
+        ['', ...types].map((t) => h('button', { 'aria-pressed': String(ideaType === t), onclick: () => { ideaType = t; renderIdeas(root); } }, t || 'All')),
+        h('button', { 'aria-pressed': String(f.kidOnly), onclick: () => setFilters({ kidOnly: !f.kidOnly }) }, icon('kid', 16), 'Kid-friendly only')),
+      h('button', { class: 'btn small', onclick: () => openEditor('Ideas', null, { City: f.cities.length === 1 ? f.cities[0] : '', Type: ideaType }) }, icon('plus', 16), 'Add idea')));
   if (!ideas.length) {
-    root.append(h('div', { class: 'empty' }, m.items.some((i) => i.type === 'idea') ? 'No ideas match the filters.' : 'No restaurant ideas yet. Tap “Add idea” to suggest one.'));
+    root.append(h('div', { class: 'empty' }, m.items.some((i) => i.type === 'idea') ? 'No ideas match the filters.' : 'No ideas yet. Tap “Add idea” to suggest one.'));
     return;
   }
+  let city = null;
+  let box = null;
   ideas.forEach((it) => {
-    root.append(h('div', { class: 'card' },
-      h('div', { class: 'group-head' },
-        h('div', null, h('h3', null, it.title), h('div', { class: 'where' }, [it.city, it.cuisine, it.price].filter(Boolean).join(' · '))),
-        statusBadge(it.status)),
-      h('div', { class: 'row small', style: { marginTop: '8px' } },
-        it.kid === 'Yes' ? h('span', { class: 'chip' }, icon('kid', 14), 'Kid-friendly') : it.kid === 'No' ? h('span', { class: 'chip' }, 'Not for kids') : null,
-        it.raw['Reservation needed'] ? h('span', { class: 'chip' }, `Reservation needed: ${it.raw['Reservation needed']}`) : null,
-        it.raw['Booking method'] ? h('span', { class: 'chip' }, it.raw['Booking method']) : null,
-        it.raw['Suggested by'] ? h('span', { class: 'muted' }, `Suggested by ${it.raw['Suggested by']}`) : null,
-        it.raw._pending ? h('span', { class: 'pending-tag' }, 'Not synced yet') : null),
-      it.raw.Notes ? h('p', { class: 'small', style: { margin: '8px 0 0' } }, it.raw.Notes) : null,
-      h('div', { class: 'row', style: { marginTop: '10px' } },
-        it.status !== 'Confirmed' && it.status !== 'Cancelled' ? h('button', { class: 'btn small primary', onclick: () => openMoveIdea(it.raw) }, icon('reservation', 16), 'Move to Reservations') : null,
-        h('button', { class: 'btn small', onclick: () => openEditor('Restaurant ideas', it.raw) }, icon('edit', 16), 'Edit'),
-        safeUrl(it.link) ? h('a', { class: 'btn small', href: safeUrl(it.link), target: '_blank', rel: 'noopener' }, 'Website', icon('ext', 14)) : null,
-        mapLinks(it))));
+    if (it.city !== city) {
+      city = it.city;
+      box = h('section', { class: 'card' }, h('h3', { style: { marginTop: 0 } }, city || 'No city'));
+      root.append(box);
+    }
+    box.append(ideaCard(it));
   });
 }
 
@@ -143,7 +142,7 @@ export function openFilters() {
     toggles('Type', TYPES, 'types', (t) => TYPE_LABELS[t]),
     toggles('Status', STATUSES, 'statuses'),
     h('div', { class: 'field', role: 'group', 'aria-label': 'Dates' }, h('span', null, 'Dates ', h('span', { class: 'hint' }, '(List and Map “all dates”)')), h('div', { class: 'two' }, from, to)),
-    h('label', { class: 'row', style: { marginBottom: '14px' } }, kid, 'Restaurant ideas: kid-friendly only'),
+    h('label', { class: 'row', style: { marginBottom: '14px' } }, kid, 'Ideas: kid-friendly only'),
     h('div', { class: 'form-actions' },
       h('button', { class: 'btn', style: { marginRight: 'auto' }, onclick: () => { setFilters({ ...DEFAULT_FILTERS }); s.close(); } }, 'Reset'),
       h('button', { class: 'btn primary', onclick: () => {

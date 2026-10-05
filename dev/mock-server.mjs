@@ -22,7 +22,6 @@ export function startMockServer({ port = 8787, delayMs = 0 } = {}) {
       // Same as "Trip app → Remove a person's access" in the Sheet
       if (req.method === 'POST' && req.url.startsWith('/revoke?email=')) return send(200, gas.ctx.adminRemoveUser_(decodeURIComponent(req.url.slice(14))));
       if (req.method === 'GET' && req.url === '/state') return send(200, gas.ss.sheets);
-      if (req.method === 'GET' && req.url === '/uploads') return send(200, [...gas.drive.values()].map(({ bytes, ...f }) => ({ ...f, length: bytes.length })));
       if (req.method === 'POST' && req.url === '/claude-off') { gas.props.delete('ANTHROPIC_API_KEY'); return send(200, { ok: true }); }
       if (req.method === 'POST' && req.url === '/claude-on') { gas.props.set('ANTHROPIC_API_KEY', 'sk-ant-fake-key-for-local-tests-only'); return send(200, { ok: true }); }
       if (req.method === 'GET') return send(200, { ok: true, app: 'japan-trip' });

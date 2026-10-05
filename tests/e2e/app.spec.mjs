@@ -28,8 +28,9 @@ async function seed() {
     ['Reservations', { ID: 'R-1', Date: '2030-03-08', Time: '18:30', Type: 'Restaurant', Name: 'Seafood dinner', City: 'Hakodate', Who: 'Avery, Blake', Status: 'Tentative', 'Cancellation deadline': '2030-03-06 18:00' }],
     ['Reservations', { ID: 'R-old', Date: '2030-03-08', Time: '20:00', Type: 'Restaurant', Name: 'Old booking', City: 'Hakodate', Who: 'Everyone', Status: 'Cancelled' }],
     ['Notes', { ID: 'N-1', Date: '2030-03-08', City: 'Hakodate', Who: 'Everyone', Note: 'Morning market by the bay' }],
-    ['Restaurant ideas', { ID: 'I-1', Name: 'Ramen alley', City: 'Sapporo', Cuisine: 'Ramen', 'Kid-friendly': 'Yes', Status: 'Idea' }],
-    ['Restaurant ideas', { ID: 'I-2', Name: 'Kaiseki house', City: 'Sendai', Cuisine: 'Kaiseki', 'Kid-friendly': 'No', Status: 'Idea' }],
+    ['Ideas', { ID: 'I-1', Name: 'Ramen alley', City: 'Sapporo', Type: 'Restaurant', Category: 'Ramen', Price: '$', 'Kid-friendly': 'Yes', 'Best for': 'Whole family', Reservation: 'Walk-in', Source: 'https://example.com/ramen', Verification: 'Sourced', Status: 'Idea' }],
+    ['Ideas', { ID: 'I-2', Name: 'Kaiseki house', City: 'Sendai', Type: 'Restaurant', Category: 'Kaiseki', Michelin: 'One star', 'Kid-friendly': 'No', Reservation: 'Required, well ahead', Status: 'Idea' }],
+    ['Ideas', { ID: 'I-3', Name: 'Morning market', City: 'Hakodate', Type: 'Activity', Category: 'Market', 'Kid-friendly': 'Yes', 'Timing / closed days': 'Usually closed Fridays.', Verification: 'General knowledge – verify', Status: 'Idea' }],
   ];
   for (const [tab, values] of rows) await api({ action: 'upsert', tab, values });
 }
@@ -228,12 +229,19 @@ test('filters: persist after reload and apply to the day view', async ({ page, c
   await expect(page.locator('section.card')).not.toContainText('Seafood dinner'); // Avery & Blake only
 });
 
-test('restaurant ideas: kid-friendly filter and one-tap move to Reservations', async ({ page, context }) => {
+test('ideas: type and kid-friendly filters, booking details, and one-tap Book', async ({ page, context }) => {
   await open(page, context, { hash: '#ideas' });
-  await expect(page.locator('.card h3')).toHaveText(['Ramen alley', 'Kaiseki house']);
+  await expect(page.locator('.idea-title')).toHaveText(['Morning market', 'Ramen alley', 'Kaiseki house']);
+  await expect(page.locator('[data-idea=I-2]')).toContainText('One star');
+  await expect(page.locator('[data-idea=I-2]')).toContainText('Booking: Required, well ahead');
+  await expect(page.locator('[data-idea=I-3]')).toContainText('Verify details');
+  await page.getByRole('button', { name: 'Activity', exact: true }).click();
+  await expect(page.locator('.idea-title')).toHaveText(['Morning market']);
+  await page.getByRole('button', { name: 'All', exact: true }).click();
   await page.getByRole('button', { name: 'Kid-friendly only' }).click();
-  await expect(page.locator('.card h3')).toHaveText(['Ramen alley']);
-  await page.getByRole('button', { name: 'Move to Reservations' }).click();
+  await expect(page.locator('.idea-title')).toHaveText(['Morning market', 'Ramen alley']);
+  await expect(page.locator('[data-idea=I-1]').getByRole('link', { name: /Source/ })).toHaveAttribute('href', 'https://example.com/ramen');
+  await page.locator('[data-idea=I-1]').getByRole('button', { name: 'Book' }).click();
   const dlg = page.getByRole('dialog', { name: 'Move to Reservations' });
   await dlg.locator('input[name=Date]').fill('2030-03-04');
   await dlg.locator('input[name=Time]').fill('12:00');
@@ -241,8 +249,34 @@ test('restaurant ideas: kid-friendly filter and one-tap move to Reservations', a
   await expect(dlg).toContainText('Pick who is going');
   await dlg.getByRole('group', { name: 'Groups' }).getByRole('button', { name: 'Everyone' }).click();
   await dlg.getByRole('button', { name: 'Move to Reservations' }).click();
-  await expect.poll(async () => (await sheetRows('Reservations')).find((r) => r.Name === 'Ramen alley')).toMatchObject({ Date: '2030-03-04', Time: '12:00', City: 'Sapporo', 'Kid-friendly': 'Yes', Type: 'Restaurant', Who: 'Everyone' });
-  await expect.poll(async () => (await sheetRows('Restaurant ideas')).find((r) => r.ID === 'I-1')?.Status).toBe('Confirmed');
+  await expect.poll(async () => (await sheetRows('Reservations')).find((r) => r.Name === 'Ramen alley')).toMatchObject({ Date: '2030-03-04', Time: '12:00', City: 'Sapporo', 'Kid-friendly': 'Yes', Type: 'Restaurant', Link: 'https://example.com/ramen', Who: 'Everyone' });
+  await expect.poll(async () => (await sheetRows('Ideas')).find((r) => r.ID === 'I-1')?.Status).toBe('Confirmed');
+});
+
+test('day view ends with ideas for the cities people are in, flagging a closing day', async ({ page, context }) => {
+  await open(page, context);
+  await page.getByRole('button', { name: /Fri, Mar 8/ }).click();
+  const ideas = page.getByRole('region', { name: 'Ideas for this day' });
+  await expect(ideas).toContainText('Ideas in Hakodate');
+  await expect(ideas).not.toContainText('Ramen alley'); // Sapporo
+  await ideas.getByText('Ideas in Hakodate').click();
+  await expect(ideas.locator('[data-idea=I-3]')).toContainText('May be closed this day');
+  await page.getByRole('button', { name: /Sat, Mar 9/ }).click();
+  await page.getByRole('region', { name: 'Ideas for this day' }).getByText('Ideas in Hakodate').click();
+  await expect(page.locator('[data-idea=I-3]')).not.toContainText('May be closed this day');
+});
+
+test('by plan: the whole trip grouped by travel, stays and reservation type', async ({ page, context }) => {
+  await open(page, context);
+  await page.getByRole('button', { name: 'By plan' }).click();
+  await expect(page.getByRole('region', { name: 'Travel' })).toContainText('Hokuto 5');
+  await expect(page.getByRole('region', { name: 'Stays' })).toContainText('Otaru');
+  await expect(page.getByRole('region', { name: 'Restaurants' })).toContainText('Seafood dinner');
+  await expect(page.getByRole('region', { name: 'Restaurants' })).not.toContainText('Old booking'); // cancelled
+  await expect(page.getByRole('region', { name: 'Notes' })).toContainText('Morning market by the bay');
+  await page.getByRole('region', { name: 'Travel' }).getByRole('button', { name: 'Open Mar 8' }).click();
+  await expect(page.getByRole('button', { name: 'By group' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Fri, Mar 8', { exact: true }).first()).toBeVisible();
 });
 
 test('map: pins for the chosen day link to Google Maps and Apple Maps', async ({ page, context }) => {
@@ -464,46 +498,26 @@ test('import pasted text: each booking opens pre-filled, and Who must be chosen'
   await found.getByRole('button', { name: 'Done' }).click();
 
   await expect.poll(async () => (await sheetRows('Stays')).find((r) => r.Hotel === 'Harbor View Hotel')).toMatchObject({
-    'Check-in': '2030-03-05', 'Check-out': '2030-03-08', City: 'Otaru', Who: 'Avery, Kit', 'Confirmation #': 'HV-0042', Status: 'Confirmed', 'Last edited by': 'Avery', Attachment: '',
+    'Check-in': '2030-03-05', 'Check-out': '2030-03-08', City: 'Otaru', Who: 'Avery, Kit', 'Confirmation #': 'HV-0042', Status: 'Confirmed', 'Last edited by': 'Avery',
   });
   await expect.poll(async () => (await sheetRows('Transport')).find((r) => r['Carrier / train'] === 'Air Example 123')).toMatchObject({
     Date: '2030-03-04', Depart: '09:10', Mode: 'Flight', From: 'Haneda Airport', To: 'Sapporo', Who: 'Casey, Drew',
   });
 });
 
-test('import a PDF: the file is kept with the booking and opens from the day view', async ({ page, context }) => {
+test('import a PDF: read by Claude, the file itself is not kept', async ({ page, context }) => {
   await open(page, context);
   const dlg = await openImport(page);
   await dlg.locator('input[type=file]').setInputFiles({ name: 'hotel.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 fictional booking') });
   await expect(dlg).toContainText('hotel.pdf');
-  await expect(dlg.getByRole('checkbox')).toBeChecked();
+  await expect(dlg.getByRole('checkbox')).toHaveCount(0);
   await dlg.getByRole('button', { name: 'Read it' }).click();
   const found = page.getByRole('dialog', { name: 'Bookings found' });
-  await expect(found).toContainText('The file is kept with each booking you add from here.');
   await found.locator('[data-import-tab=Stays]').getByRole('button', { name: 'Check and add' }).click();
   const stay = page.getByRole('dialog', { name: 'Add stay' });
-  await expect(stay.getByRole('button', { name: 'View the uploaded file' })).toBeVisible();
   await stay.getByRole('button', { name: 'Add', exact: true }).click();
   await found.getByRole('button', { name: 'Done' }).click();
-  await expect.poll(async () => (await sheetRows('Stays')).find((r) => r.Hotel === 'Harbor View Hotel')?.Attachment).toMatch(/^https:\/\/drive\.google\.com\/file\/d\//);
-  const uploads = await (await fetch(`${API}/uploads`)).json();
-  expect(uploads.find((f) => /hotel\.pdf$/.test(f.name))).toMatchObject({ mimeType: 'application/pdf', trashed: false });
-
-  await expect(page.locator('.sync-pill')).toContainText('Synced');
-  await page.getByRole('button', { name: /Mar 5(?!\d)/ }).first().click();
-  await page.getByRole('button', { name: 'File', exact: true }).first().click();
-  const view = page.getByRole('dialog', { name: 'Uploaded file' });
-  await expect(view).toContainText('hotel.pdf');
-  await expect(view.getByRole('link', { name: 'Open or save the file' })).toHaveAttribute('href', /^blob:/);
-});
-
-test('import: a kept file is discarded when nothing is added from it', async ({ page, context }) => {
-  await open(page, context);
-  const dlg = await openImport(page);
-  await dlg.locator('input[type=file]').setInputFiles({ name: 'tickets.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 tickets') });
-  await dlg.getByRole('button', { name: 'Read it' }).click();
-  await page.getByRole('dialog', { name: 'Bookings found' }).getByRole('button', { name: 'Done' }).click();
-  await expect.poll(async () => (await (await fetch(`${API}/uploads`)).json()).find((f) => /tickets\.pdf$/.test(f.name))?.trashed).toBe(true);
+  await expect.poll(async () => (await sheetRows('Stays')).find((r) => r.Hotel === 'Harbor View Hotel')).toMatchObject({ City: 'Otaru', 'Confirmation #': 'HV-0042' });
 });
 
 test('import: clear messages when reading is off, or nothing is found', async ({ page, context }) => {

@@ -161,9 +161,9 @@ export function applyQueue(data, queue) {
   queue.forEach(({ action, payload }) => {
     if (action === 'upsert') upsert(payload.tab, payload.key, payload.values);
     if (action === 'moveIdea') {
-      const idea = d.tabs['Restaurant ideas']?.rows.find((r) => r.ID === payload.ideaId) || {};
-      upsert('Reservations', null, { Type: 'Restaurant', Name: idea.Name, City: idea.City, Address: idea.Address, 'Kid-friendly': idea['Kid-friendly'], Link: idea.Link, Status: 'Tentative', Lat: idea.Lat, Lng: idea.Lng, ...payload.reservation });
-      upsert('Restaurant ideas', payload.ideaId, { Status: 'Confirmed' });
+      const idea = d.tabs.Ideas?.rows.find((r) => r.ID === payload.ideaId) || {};
+      upsert('Reservations', null, { Type: idea.Type || 'Restaurant', Name: idea.Name, City: idea.City, Address: idea.Address, 'Kid-friendly': idea['Kid-friendly'], Link: /^https?:\/\//.test(idea.Source || '') ? idea.Source : '', Status: 'Tentative', Lat: idea.Lat, Lng: idea.Lng, ...payload.reservation });
+      upsert('Ideas', payload.ideaId, { Status: 'Confirmed' });
     }
     if (action === 'addListValue') {
       d.lists.columns[payload.column] ||= [];
@@ -247,15 +247,6 @@ export async function eraseThisDevice({ keepUrl = false } = {}) {
 /** Sends pasted text and/or a file to be read by Claude (through the Sheet's script). */
 export async function extractBooking(payload) {
   return callApi(state.config, 'extract', payload, { timeoutMs: 180000 });
-}
-
-/** Downloads a file kept with a booking (only files in the app's uploads folder). */
-export async function fetchAttachment(link) {
-  return callApi(state.config, 'attachment', { id: link }, { timeoutMs: 90000 });
-}
-
-export async function discardUpload(link) {
-  try { await callApi(state.config, 'discardUpload', { id: link }, { timeoutMs: 20000 }); } catch { /* it stays in the uploads folder */ }
 }
 
 export async function resolveLocation(text) {

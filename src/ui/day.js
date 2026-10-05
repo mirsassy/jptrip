@@ -5,13 +5,26 @@ import { makePass, selectedPeople } from '../lib/filters.js';
 import { addDays, fmtDay, jpNow } from '../lib/dates.js';
 import { whoChips, statusBadge, weatherChip, googleMapsLink, itemTimeLabel, personChip } from './common.js';
 import { openEditor } from './forms.js';
-import { openAttachment } from './import.js';
+import { dayIdeas } from './ideas.js';
+import { renderPlan } from './plan.js';
 
 let mode = (() => { try { return localStorage.getItem('trip.dayMode') || 'group'; } catch { return 'group'; } })();
+
+document.addEventListener('plan-open-day', () => { mode = 'group'; });
+
+const MODES = [['group', 'By group'], ['person', 'By person'], ['plan', 'By plan']];
+const modeSwitch = (root, conflicts) => h('div', { class: 'seg', role: 'group', 'aria-label': 'Show by' },
+  MODES.map(([k, label]) => h('button', { 'aria-pressed': String(mode === k), onclick: () => { mode = k; try { localStorage.setItem('trip.dayMode', k); } catch { /* ignore */ } renderDay(root, conflicts); } }, label)));
 
 export function renderDay(root, conflicts) {
   clear(root);
   const m = state.model;
+  if (mode === 'plan') {
+    // The whole trip by kind of plan; no date picker
+    root.append(h('div', { class: 'row', style: { marginBottom: '10px' } }, modeSwitch(root, conflicts)));
+    renderPlan(root);
+    return;
+  }
   const date = state.date;
   const days = tripDays(m, jpNow().date);
   const today = jpNow().date;
@@ -45,9 +58,7 @@ export function renderDay(root, conflicts) {
     root.append(h('div', { class: 'banner warn' }, icon('issues', 18), h('div', null, todays.map((c) => h('div', null, c.message)))));
   }
 
-  root.append(h('div', { class: 'row', style: { justifyContent: 'space-between', marginBottom: '10px' } },
-    h('div', { class: 'seg', role: 'group', 'aria-label': 'Show by' },
-      ['group', 'person'].map((k) => h('button', { 'aria-pressed': String(mode === k), onclick: () => { mode = k; try { localStorage.setItem('trip.dayMode', k); } catch { /* ignore */ } renderDay(root, conflicts); } }, k === 'group' ? 'By group' : 'By person')))));
+  root.append(h('div', { class: 'row', style: { justifyContent: 'space-between', marginBottom: '10px' } }, modeSwitch(root, conflicts)));
 
   const pass = makePass(m, state.filters, { ignoreDates: true });
   const only = selectedPeople(m, state.filters);
@@ -63,6 +74,12 @@ export function renderDay(root, conflicts) {
       root.append(groupCard(groups[0], date, flaggedIds, n));
     });
   }
+
+  // Ideas (Ideas tab) for every city someone is in today
+  const cities = [];
+  dayGroups(m, date, { pass, onlyPeople: only }).forEach((g) => g.cities.forEach((c) => { if (!cities.some((x) => x.toLowerCase() === c.toLowerCase())) cities.push(c); }));
+  const ideas = dayIdeas(date, cities);
+  if (ideas) root.append(ideas);
 }
 
 function groupCard(g, date, flaggedIds, person) {
@@ -96,7 +113,6 @@ function timelineRow(e, g, flaggedIds) {
   if (it.status && it.status !== 'Confirmed') meta.push(statusBadge(it.status));
   if (where) meta.push(h('span', null, where));
   if (it.type !== 'note' || it.who) meta.push(whoChips(it.people));
-  if (it.raw.Attachment && e.kind !== 'staying') meta.push(h('button', { class: 'link', onclick: () => openAttachment(it.raw.Attachment) }, icon('clip', 14), ' File'));
   if (it.raw._pending) meta.push(h('span', { class: 'pending-tag' }, 'Not synced yet'));
   const links = e.kind === 'staying' ? null : googleMapsLink(it);
   return h('li', { class: [it.status === 'Cancelled' ? 'cancelled' : '', flaggedIds.has(it.id) ? 'flagged' : ''].join(' ') },

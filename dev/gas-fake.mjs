@@ -145,7 +145,7 @@ export function seedTabs(tz = 'America/Los_Angeles') {
       ['Kit', 'Child', 'Avery family', '#17BECF', 'Age 7'], ['Robin', 'Child', 'Avery family', '#BCBD22', 'Age 3'],
     ],
     Stays: [
-      ['Check-in', 'Check-out', 'City', 'Hotel', 'Address', 'Who', 'Status', 'Notes', 'Confirmation #', 'ID', 'Lat', 'Lng', 'Last edited by', 'Attachment'],
+      ['Check-in', 'Check-out', 'City', 'Hotel', 'Address', 'Who', 'Status', 'Notes', 'Confirmation #', 'ID', 'Lat', 'Lng', 'Last edited by'],
       [d(3, 4), d(3, 5), 'Sapporo', '', '', 'Everyone', 'Tentative'],
       [d(3, 5), d(3, 8), 'Otaru', '', '', 'Everyone', 'Tentative'],
       [d(3, 8), d(3, 10), 'Hakodate', '', '', 'Everyone', 'Tentative'],
@@ -155,9 +155,9 @@ export function seedTabs(tz = 'America/Los_Angeles') {
       [d(3, 18), d(3, 21), 'Yokohama', '', '', 'Everyone', 'Tentative'],
       [d(3, 21), d(3, 27), 'Okinawa', '', '', 'Everyone', 'Tentative', 'Islands not yet chosen.'],
     ],
-    Transport: [['Date', 'Depart', 'Arrive', 'Mode', 'From', 'To', 'Carrier / train', 'Who', 'Seats', 'Confirmation #', 'Status', 'Notes', 'ID', 'From Lat', 'From Lng', 'To Lat', 'To Lng', 'Last edited by', 'Attachment']],
-    Reservations: [['Date', 'Time', 'Type', 'Name', 'City', 'Address', 'Who', 'Party size', 'Cancellation deadline', 'Kid-friendly', 'Confirmation #', 'Status', 'Link', 'Notes', 'ID', 'Lat', 'Lng', 'Last edited by', 'Attachment']],
-    'Restaurant ideas': [['Name', 'City', 'Cuisine', 'Price range', 'Kid-friendly', 'Reservation needed', 'Booking method', 'Link', 'Suggested by', 'Status', 'Notes', 'Address', 'ID', 'Lat', 'Lng', 'Last edited by']],
+    Transport: [['Date', 'Depart', 'Arrive', 'Mode', 'From', 'To', 'Carrier / train', 'Who', 'Seats', 'Confirmation #', 'Status', 'Notes', 'ID', 'From Lat', 'From Lng', 'To Lat', 'To Lng', 'Last edited by']],
+    Reservations: [['Date', 'Time', 'Type', 'Name', 'City', 'Address', 'Who', 'Party size', 'Cancellation deadline', 'Kid-friendly', 'Confirmation #', 'Status', 'Link', 'Notes', 'ID', 'Lat', 'Lng', 'Last edited by']],
+    Ideas: [['Name', 'City', 'Area', 'Type', 'Category', 'Michelin', 'Price', 'Kid-friendly', 'Best for', 'Reservation', 'Timing / closed days', 'Address', 'Source', 'Verification', 'Status', 'Notes', 'ID', 'Lat', 'Lng', 'Last edited by']],
     Notes: [['Date', 'City', 'Who', 'Note', 'ID', 'Last edited by']],
     Lists: [
       ['Status', 'City', 'Mode', 'Reservation type', 'Yes/No', 'City Lat', 'City Lng'],
@@ -221,38 +221,11 @@ function fakeClaude(opts, calls) {
   return json(200, { stop_reason: 'end_turn', content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: JSON.stringify(out) }] });
 }
 
-/** Minimal Drive v3 REST stand-in: create, upload media, read metadata/content, trash. */
-function fakeDrive(url, opts, drive) {
-  if (opts.headers?.Authorization !== 'Bearer fake-oauth-token') return json(401, {});
-  const u = new URL(url);
-  const method = (opts.method || 'get').toLowerCase();
-  const m = u.pathname.match(/^\/(upload\/)?drive\/v3\/files(?:\/([^/]+))?$/);
-  if (!m) return json(404, {});
-  const [, upload, id] = m;
-  const pick = (f) => {
-    const fields = (u.searchParams.get('fields') || 'id').split(',');
-    return Object.fromEntries(fields.map((k) => [k, f[k]]));
-  };
-  if (!id && method === 'post') {
-    const meta = JSON.parse(opts.payload);
-    const f = { id: `drv${drive.size + 1}xxxxxxxxxxxx`, trashed: false, parents: [], bytes: [], ...meta };
-    drive.set(f.id, f);
-    return json(200, pick(f));
-  }
-  const f = drive.get(decodeURIComponent(id || ''));
-  if (!f) return json(404, { error: { message: 'File not found' } });
-  if (upload && method === 'patch') { f.bytes = opts.payload.getBytes(); f.size = String(f.bytes.length); return json(200, { id: f.id }); }
-  if (method === 'patch') { Object.assign(f, JSON.parse(opts.payload)); return json(200, { id: f.id }); }
-  if (u.searchParams.get('alt') === 'media') return { getResponseCode: () => 200, getBlob: () => ({ getBytes: () => f.bytes }), getHeaders: () => ({}) };
-  return json(200, pick(f));
-}
-
 export function createGas({ tz = 'America/Los_Angeles', tabs = seedTabs(tz), users = TEST_USERS } = {}) {
   const ss = new FakeSpreadsheet(tabs, tz);
   const props = new Map();
   const cache = new Map();
   const calls = { geocode: 0, claude: [] };
-  const drive = new Map();
   const ctx = {
     console,
     SpreadsheetApp: { getActive: () => ss, getUi: () => { throw new Error('no ui'); } },
@@ -304,7 +277,6 @@ export function createGas({ tz = 'America/Los_Angeles', tabs = seedTabs(tz), use
           return { getHeaders: () => ({ Location: 'https://www.google.com/maps/place/Kinkaku-ji/@35.0394,135.7292,17z' }), getContentText: () => '' };
         }
         if (url === 'https://api.anthropic.com/v1/messages') return fakeClaude(opts, calls);
-        if (url.startsWith('https://www.googleapis.com/')) return fakeDrive(url, opts, drive);
         return { getHeaders: () => ({}), getContentText: () => '' };
       },
     },
@@ -327,5 +299,5 @@ export function createGas({ tz = 'America/Los_Angeles', tabs = seedTabs(tz), use
     if (!r.ok) throw new Error(`login failed: ${r.error}`);
     return r.token;
   }
-  return { ss, ctx, post, login, props, cache, calls, drive };
+  return { ss, ctx, post, login, props, cache, calls };
 }

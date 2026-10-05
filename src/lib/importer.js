@@ -43,7 +43,7 @@ const deadline = (v) => (/^\d{4}-\d{2}-\d{2}( \d{1,2}:\d{2})?$/.test(clean(v)) ?
 const httpLink = (v) => (/^https?:\/\//i.test(clean(v)) ? clean(v) : '');
 
 /** One extracted item -> { tab, values, unmatched } ready for openEditor(tab, null, values). */
-export function toRow(item, model, attachment = '') {
+export function toRow(item, model) {
   const tab = TAB[item.kind] || 'Notes';
   const cities = model.cities.map((c) => c.name);
   const statuses = model.lists.Status?.length ? model.lists.Status.map(String) : ['Idea', 'Tentative', 'Confirmed', 'Cancelled'];
@@ -60,7 +60,6 @@ export function toRow(item, model, attachment = '') {
     put('Status', pick(item.status, statuses));
     put('Confirmation #', item.confirmation);
     put('Notes', notes);
-    if (attachment) v.Attachment = attachment;
   }
   if (tab === 'Stays') {
     put('Check-in', date(item.date));

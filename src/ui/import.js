@@ -2,7 +2,7 @@
 // Claude, which returns the bookings it found. Each one then opens in its add form,
 // pre-filled, so the person checks it and picks who is going before it is saved.
 import { h, icon, sheet, toast } from './dom.js';
-import { state, extractBooking, fetchAttachment, discardUpload } from '../lib/store.js';
+import { state, extractBooking } from '../lib/store.js';
 import { ERROR_TEXT } from '../lib/api.js';
 import { importHints, toRow, rowSummary } from '../lib/importer.js';
 import { openEditor, TAB_TITLES } from './forms.js';
@@ -42,8 +42,8 @@ async function prepareImage(file) {
 }
 
 /** Builds the request: text files are read here and sent as text; PDFs and images go as files. */
-async function buildPayload(text, file, keep) {
-  const payload = { text, keep: !!(file && keep), hints: importHints(state.model) };
+async function buildPayload(text, file) {
+  const payload = { text, hints: importHints(state.model) };
   if (!file) return payload;
   let f = file;
   if (isText(file)) {
@@ -54,8 +54,8 @@ async function buildPayload(text, file, keep) {
     throw new Error('file_type');
   }
   if (f.size > MAX_BYTES) throw new Error('file_too_big');
-  if (isText(file) && !keep) return payload;
-  payload.file = { name: f.name, mimeType: isText(file) ? 'text/plain' : (f.type || 'application/pdf'), data: await toBase64(f) };
+  if (isText(file)) return payload;
+  payload.file = { name: f.name, mimeType: f.type || 'application/pdf', data: await toBase64(f) };
   return payload;
 }
 
@@ -63,13 +63,9 @@ export function openImport() {
   const text = h('textarea', { name: 'import-text', rows: 6, placeholder: 'Paste a confirmation email, a booking page, or notes like “Dinner at Ichiran, Mar 6 7pm, 4 people”' });
   const fileInput = h('input', { type: 'file', accept: '.pdf,application/pdf,image/*,.heic,.ics,.eml,.txt,.csv,.html,.htm', class: 'hidden', 'aria-label': 'Choose a file' });
   const fileLine = h('div', { class: 'small', 'aria-live': 'polite' });
-  const keep = h('input', { type: 'checkbox', name: 'keep', checked: true });
-  const keepRow = h('label', { class: 'row small hidden', style: { marginTop: '8px', alignItems: 'flex-start', flexWrap: 'nowrap' } }, keep,
-    h('span', null, 'Keep a copy of the file with the booking (stored privately in the trip organizer’s Google Drive; anyone signed in to the app can open it)'));
   let file = null;
   const showFile = () => {
     fileLine.replaceChildren(...(file ? [icon('clip', 16), ` ${file.name} (${Math.max(1, Math.round(file.size / 1024))} KB) `, h('button', { type: 'button', class: 'link', onclick: () => { file = null; fileInput.value = ''; showFile(); } }, 'remove')] : []));
-    keepRow.classList.toggle('hidden', !file);
   };
   fileInput.addEventListener('change', () => { file = fileInput.files[0] || null; showFile(); });
 
@@ -79,13 +75,13 @@ export function openImport() {
   if (offline) go.disabled = true;
 
   const form = h('form', null,
-    h('p', { class: 'muted', style: { marginTop: 0 } }, 'Claude reads it and fills in the forms. You check each booking and choose who is going before anything is added.'),
+    h('p', { class: 'muted', style: { marginTop: 0 } }, 'Claude reads it and fills in the forms. You check each booking and choose who is going before anything is added. The file itself is not stored.'),
     offline ? h('div', { class: 'banner warn' }, 'Importing needs internet. You can still add bookings by hand.') : null,
     h('label', { class: 'field' }, h('span', null, 'Paste text'), text),
     h('div', { class: 'field' }, h('span', null, 'Or a file'),
       h('div', null, h('button', { type: 'button', class: 'btn small', onclick: () => fileInput.click() }, icon('clip', 18), 'Choose a file or photo'), fileInput),
       h('div', { class: 'small muted', style: { marginTop: '4px' } }, 'PDF, photo or screenshot, calendar file (.ics) or saved email (.eml); up to 8 MB.'),
-      fileLine, keepRow),
+      fileLine),
     h('p', { class: 'small muted' }, 'What you paste or upload is sent to Anthropic’s Claude to be read. Leave out card and passport numbers.'),
     status,
     h('div', { class: 'form-actions' }, h('button', { type: 'button', class: 'btn', onclick: () => s.close() }, 'Close'), go));
@@ -97,7 +93,7 @@ export function openImport() {
     go.disabled = true;
     status.textContent = 'Reading… this can take up to a minute.';
     try {
-      const payload = await buildPayload(text.value.trim(), file, keep.checked);
+      const payload = await buildPayload(text.value.trim(), file);
       const res = await extractBooking(payload);
       s.close();
       showResults(res);
@@ -114,8 +110,7 @@ export function openImport() {
 
 /** The list of bookings Claude found; each opens in its form, pre-filled. */
 function showResults(res) {
-  const rows = (res.items || []).map((it) => toRow(it, state.model, res.attachment || ''));
-  let added = 0;
+  const rows = (res.items || []).map((it) => toRow(it, state.model));
   const list = h('div', { style: { display: 'grid', gap: '10px' } });
   rows.forEach((r) => {
     const btn = h('button', { type: 'button', class: 'btn primary small' }, 'Check and add');
@@ -130,7 +125,6 @@ function showResults(res) {
       openEditor(r.tab, null, r.values, {
         intro: h('div', { class: 'banner info' }, h('div', null, 'Filled in by Claude from your document. Check the details', r.tab === 'Notes' ? '' : ' and who is going', ', then tap Add.')),
         onSaved: () => {
-          added++;
           card.classList.add('done');
           btn.replaceWith(h('span', { class: 'small', style: { fontWeight: 600 } }, '✓ Added'));
         },
@@ -145,30 +139,6 @@ function showResults(res) {
       ? h('p', { class: 'muted', style: { marginTop: 0 } }, `Found ${rows.length} booking${rows.length === 1 ? '' : 's'}. Nothing is added until you tap Add in each form.`)
       : h('p', null, 'No bookings were found in that. You can add one by hand with the + button.'),
     list,
-    res.attachment ? h('p', { class: 'small muted' }, icon('clip', 14), ' The file is kept with each booking you add from here.') : null,
     h('div', { class: 'form-actions' }, h('button', { type: 'button', class: 'btn', onclick: () => s.close() }, 'Done')));
-  const s = sheet('Bookings found', body, {
-    // A kept file that ended up on no booking is moved to the Drive trash
-    onClose: () => { if (res.attachment && !added) discardUpload(res.attachment); },
-  });
-}
-
-/** Shows a file kept with a booking: fetched through the app, since it lives in the organizer's private Drive. */
-export async function openAttachment(link) {
-  if (!navigator.onLine) { toast('Opening the file needs internet.'); return; }
-  const body = h('div', null, h('p', { class: 'muted' }, 'Loading the file…'));
-  let url = null;
-  const s = sheet('Uploaded file', body, { onClose: () => { if (url) setTimeout(() => URL.revokeObjectURL(url), 60000); } });
-  try {
-    const f = await fetchAttachment(link);
-    const bytes = Uint8Array.from(atob(f.data), (c) => c.charCodeAt(0));
-    url = URL.createObjectURL(new Blob([bytes], { type: f.mimeType || 'application/octet-stream' }));
-    body.replaceChildren(
-      h('p', { class: 'small muted' }, f.name),
-      /^image\//.test(f.mimeType) ? h('img', { src: url, alt: f.name, style: { maxWidth: '100%', borderRadius: '8px' } }) : null,
-      h('p', null, h('a', { class: 'btn', href: url, target: '_blank', rel: 'noopener', download: f.name }, icon('ext', 18), 'Open or save the file')));
-  } catch (err) {
-    body.replaceChildren(h('p', null, ERROR_TEXT[err.code] || 'The file could not be opened.'));
-  }
-  return s;
+  const s = sheet('Bookings found', body);
 }

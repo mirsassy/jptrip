@@ -8,7 +8,7 @@ Setup is split in two: what is already done, and what only you, the trip organiz
 
 | What | Who | Where |
 |---|---|---|
-| Added the app's columns to the trip Sheet (ID, Lat/Lng, Last edited by, Attachment on Stays/Transport/Reservations, Address on Restaurant ideas, City Lat/Lng on Lists), city coordinates, and the families as groups (People tab, Group column) | Claude | The trip Sheet |
+| Added the app's columns to the trip Sheet (ID, Lat/Lng, Last edited by, ID/Lat/Lng/Last edited by at the end of Ideas, City Lat/Lng on Lists), city coordinates, and the families as groups (People tab, Group column) | Claude | The trip Sheet |
 | Wrote the app, the Apps Script (`apps-script/Code.gs`), tests and this documentation, including importing bookings from files or pasted text | Claude | This repository |
 | Pushed the code to this public repository with no real names, dates, emails or secrets (tests use a made-up family and trip) | Claude | GitHub |
 | Set up automatic testing and publishing: every push to `main` runs the tests, then publishes the app | Claude | `.github/workflows/pages.yml` |
@@ -46,7 +46,7 @@ About 25 minutes. Do them in this order.
 3. Google asks you to authorize the script once:
    - Choose your account.
    - "Google hasn't verified this app" → **Advanced** → **Go to Trip app (unsafe)**. It is your own script; the warning appears for every personal script.
-   - **Allow**. The script asks to edit *this* spreadsheet only, see and manage only the Drive files it creates itself (uploaded bookings), connect to external services (Claude, and short Google Maps links) and run when you are not present (for step 3).
+   - **Allow**. The script asks to edit *this* spreadsheet only, connect to external services (Claude, and short Google Maps links) and run when you are not present (for step 3).
 4. Run **Trip app → Set up the administrator (you)…** again if the prompts didn't appear. Enter **your email**, **your name** (as in the People tab) and **a PIN of 8 to 12 digits** that only you know.
 
 Only someone who can open the Sheet's menu (only you) can create or replace the administrator. Nobody can make another administrator from the app.
@@ -85,7 +85,7 @@ The **+ → Import from a file or pasted text** button sends a confirmation emai
 
 The key stays in the script's settings; it is never sent to phones. Each person can read up to 40 documents a day. **Trip app → Turn off reading bookings with Claude** removes the key.
 
-Uploaded files are kept in a Drive folder named **Trip app uploads**, created the first time someone keeps a file. It is shared with nobody; family members open files through the app. Move that folder into your **Claude** folder when it appears (the app keeps working after the move).
+Uploaded files are only read, never stored.
 
 ### 6. Sign in on your phone (2 min)
 
@@ -128,5 +128,5 @@ On one iPhone and one Android phone: install, sign in, add a note, turn on airpl
 | You changed `Code.gs` but nothing changed | Deploy a **New version** (step 4). |
 | "Reading bookings is not turned on yet" | Do step 5. |
 | "The Claude API key in the Sheet is not working" | Make a new key in the Anthropic console and set it again (step 5). Also check the account has credit. |
-| After updating the script, Google asks for permission again | Expected when the script needs a new permission (for example Drive for uploads). Allow it, then deploy a new version. |
+| After updating the script, Google asks for permission again | Expected when the script needs a new permission . Allow it, then deploy a new version. |
 | The app didn't update after a push | Check the Actions tab is green; then on the phone tap **Reload** on the "new version" banner. |
