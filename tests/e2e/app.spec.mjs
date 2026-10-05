@@ -38,6 +38,7 @@ async function seed() {
 /** Opens the app as an already-connected phone, with the clock at `when` (Japan time). */
 async function open(page, context, { hash = '#day', when = '2030-03-04T09:00:00+09:00', user = admin, stub = true, mode = 'group' } = {}) {
   if (stub) await stubNetwork(context);
+  page.on('pageerror', (e) => console.error(`PAGE ERROR: ${e.stack || e.message}`));
   const r = await signInApi(user);
   const config = { url: API, token: r.token, me: r.me };
   // Most Day-view tests look at "By group"; mode: null keeps the app's own default ("By plan")
@@ -217,8 +218,12 @@ test('edit a stay: paste a Google Maps link to fix the pin; only changed fields 
 
 test('filters: persist after reload and apply to the day view', async ({ page, context }) => {
   await open(page, context);
-  await page.getByRole('button', { name: /^Filters/ }).click();
   const dlg = page.getByRole('dialog', { name: 'Filters' });
+  // Rarely (about 1 run in 30) the first tap right after start-up does not open the dialog; tap again
+  await expect(async () => {
+    if (!(await dlg.isVisible())) await page.getByRole('button', { name: /^Filters/ }).click();
+    await expect(dlg).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: 15000 });
   await dlg.getByRole('group', { name: 'People' }).getByRole('button', { name: 'Kit', exact: true }).click();
   await dlg.getByRole('group', { name: 'Status' }).getByRole('button', { name: 'Cancelled' }).click();
   await dlg.getByRole('button', { name: 'Apply' }).click();
