@@ -26,12 +26,12 @@ After 5 wrong PINs in a row the app waits 15 minutes before you can try again; a
 
 ## Find your way around
 
-- **Month**: the whole trip on a calendar: where people sleep each night and who is there. Tap a day to open it.
+- **Month**: the whole trip on a calendar: where people sleep each night (city and hotel), reservations, and ✈ with who is flying. Tap a detail to see it, or the date to open that day.
 - **Day**: pick a date. Each card is a group sleeping in the same place that night, with times, bookings, notes and the weather. **By person** shows one card per person.
-- **Map**: where everyone is on the chosen day. Drag the slider to change days. Tap a pin for details and **Google Maps** / **Apple Maps** buttons.
+- **Map** (round map button, bottom left): the whole trip, with hotels, travel lines and arrows. Tap a pin for details and **Google Maps**. Tap the button again to close it.
 - **List**: every plan, by date.
 - **Ideas**: restaurants and activities worth considering, by city, with price, Michelin, kid-friendliness, how to book and opening notes. Filter by type or **Kid-friendly only**. **Book** turns an idea into a reservation.
-- The **Day** view ends with **Ideas for this day** for the cities you're in, and warns when a place may be closed that day. **By plan** (top of Day) lists the whole trip by kind: travel, stays, restaurants, activities, notes.
+- The **Day** view ends with **Ideas for this day** for the cities you're in, and warns when a place may be closed that day. **By plan** (top of Day) condenses the day for everyone: travel, lodging, booked activities and ideas.
 - **Issues**: things to fix, like a night with nowhere to sleep or two bookings at the same time.
 - **Filter** (funnel at the top): show only some people, cities, types or dates. Your filters are remembered.
 

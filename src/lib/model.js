@@ -226,6 +226,27 @@ export function buildModel(data) {
     items.push(it);
   });
 
+  // Stays at the same hotel booked separately (e.g. one row per family) are one place:
+  // same city and the same hotel name (ignoring case, punctuation and "by IHG"-style
+  // endings) or locations within 200 m. They share one location and one lodging key.
+  const hotelKey = (st) => lc(st.raw.Hotel).replace(/\s+by\s+[a-z]+$/, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  const sameLodging = (a, b) => {
+    if (lc(a.city) !== lc(b.city)) return false;
+    const ka = hotelKey(a), kb = hotelKey(b);
+    if (ka && kb && (ka === kb || ka.startsWith(kb) || kb.startsWith(ka))) return true;
+    return !!(a.loc && b.loc && !a.loc.approx && !b.loc.approx && distanceKm(a.loc, b.loc) < 0.2);
+  };
+  const stayItems = items.filter((it) => it.type === 'stay');
+  stayItems.forEach((st, i) => {
+    st.lodging = st.id;
+    for (let j = 0; j < i; j++) {
+      if (sameLodging(st, stayItems[j])) { st.lodging = stayItems[j].lodging; break; }
+    }
+  });
+  const lodgingLoc = new Map();
+  stayItems.forEach((st) => { if (st.loc && !st.loc.approx && (!lodgingLoc.has(st.lodging) || (st.address && !lodgingLoc.get(st.lodging).address))) lodgingLoc.set(st.lodging, { loc: st.loc, address: st.address }); });
+  stayItems.forEach((st) => { if (lodgingLoc.has(st.lodging)) st.loc = lodgingLoc.get(st.lodging).loc; });
+
   // Trip range: earliest to latest date on any non-cancelled dated row.
   let start = null, end = null;
   items.forEach((it) => {
@@ -288,7 +309,7 @@ export function dayGroups(model, date, { pass = () => true, onlyPeople = [] } = 
   names.forEach((n) => {
     const w = whereabouts(model, n, date);
     const stay = w.tonight[0];
-    const key = stay ? `stay:${stay.id}` : w.overnightTransport ? `transit:${w.overnightTransport.id}` : 'none';
+    const key = stay ? `stay:${stay.lodging || stay.id}` : w.overnightTransport ? `transit:${w.overnightTransport.id}` : 'none';
     if (!buckets.has(key)) buckets.set(key, { key, people: [], stay: stay || null, transit: stay ? null : w.overnightTransport, cities: [], whereabouts: [] });
     const b = buckets.get(key);
     b.people.push(n);
@@ -303,7 +324,7 @@ export function dayGroups(model, date, { pass = () => true, onlyPeople = [] } = 
     // Check-outs from last night's stays (when not staying on)
     const seen = new Set();
     g.whereabouts.forEach((w) => w.lastNight.forEach((s) => {
-      if (s.endDate === date && !seen.has(s.id) && pass(s)) { seen.add(s.id); timeline.push({ kind: 'checkout', item: s }); }
+      if (s.endDate === date && !seen.has(s.lodging || s.id) && pass(s)) { seen.add(s.lodging || s.id); timeline.push({ kind: 'checkout', item: s }); }
     }));
     model.items.filter((it) => (it.type === 'transport' || it.type === 'reservation' || it.type === 'note') && it.date === date && has(it) && pass(it))
       .forEach((it) => timeline.push({ kind: it.type, item: it }));

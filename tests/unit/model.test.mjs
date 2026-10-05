@@ -200,3 +200,19 @@ describe('conflicts', () => {
     expect(at('2030-03-04', '19:00')).toBe(0); // passed
   });
 });
+
+describe('same hotel, several bookings', () => {
+  it('treats rows for one hotel as one place: one location, one group for the night', () => {
+    const m = setup([
+      ['Stays', { ID: 'S-a', 'Check-in': '2030-03-08', 'Check-out': '2030-03-10', City: 'Hakodate', Hotel: 'Hotel Indigo Hakodate', Address: '12-17 Example-cho, Hakodate', Who: 'Avery family', Lat: 41.77, Lng: 140.72 }],
+      ['Stays', { ID: 'S-b', 'Check-in': '2030-03-08', 'Check-out': '2030-03-10', City: 'Hakodate', Hotel: 'HOTEL INDIGO HAKODATE by IHG', Address: '12-17 Example-cho, Hakodate 040-0001, Japan', Who: 'Casey and Drew', Lat: 41.7712, Lng: 140.7215 }],
+      ['Stays', { ID: 'S-c', 'Check-in': '2030-03-08', 'Check-out': '2030-03-10', City: 'Hakodate', Hotel: 'Another Inn', Who: 'Gale', Lat: 41.79, Lng: 140.75 }],
+    ]);
+    const a = m.itemById.get('S-a'), b = m.itemById.get('S-b'), c = m.itemById.get('S-c');
+    expect(b.lodging).toBe(a.lodging);
+    expect(b.loc).toEqual(a.loc);
+    expect(c.lodging).not.toBe(a.lodging);
+    const g = dayGroups(m, '2030-03-08').find((x) => x.stay && x.stay.lodging === a.lodging);
+    expect(g.people).toEqual(expect.arrayContaining(['Avery', 'Blake', 'Kit', 'Robin', 'Casey', 'Drew']));
+  });
+});

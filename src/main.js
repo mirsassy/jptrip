@@ -13,7 +13,6 @@ import { openAddMenu } from './ui/forms.js';
 const VIEWS = [
   ['day', 'Day', 'day'],
   ['month', 'Month', 'month'],
-  ['map', 'Map', 'map'],
   ['list', 'List', 'list'],
   ['ideas', 'Ideas', 'idea'],
   ['issues', 'Issues', 'issues'],
@@ -32,7 +31,12 @@ const paneMain = h('section', { class: 'pane pane-main', 'aria-live': 'off' });
 const paneMap = h('section', { class: 'pane pane-map' });
 const fab = h('button', { class: 'fab', 'aria-label': 'Add to the trip', onclick: openAddMenu }, icon('plus', 26));
 app.append(header, h('main', null, paneMain, paneMap), bottomNav);
-document.body.append(fab);
+// Floating Map button: opens the whole-trip map; tapped again on the map, it goes back
+const mapFab = h('button', { class: 'fab fab-map', 'aria-label': 'Trip map', onclick: () => {
+  if (route() === 'map') { location.hash = `#${lastView}`; return; }
+  location.hash = '#map';
+} }, icon('map', 24));
+document.body.append(fab, mapFab);
 
 let conflicts = [];
 
@@ -109,6 +113,10 @@ function render() {
   conflicts = findConflicts(state.model);
   renderChrome(view);
   fab.classList.toggle('hidden', view === 'setup' || (view === 'map' && !isDesktop()) || needsSetup());
+  mapFab.classList.toggle('hidden', view === 'setup' || needsSetup());
+  mapFab.setAttribute('aria-pressed', String(view === 'map'));
+  mapFab.setAttribute('aria-label', view === 'map' ? 'Close the map' : 'Trip map');
+  mapFab.replaceChildren(icon(view === 'map' ? 'close' : 'map', 24));
 
   // Don't redraw a form someone is typing in
   const typing = paneMain.contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
@@ -133,12 +141,12 @@ function render() {
 
   // Clear the map whenever the app is signed out, so no old pins stay on screen
   if (view === 'setup' && mapModule) mapModule.updateMap();
-  const mapVisible = view !== 'setup' && (view === 'map' || isDesktop());
+  const mapVisible = view !== 'setup' && (view === 'map' || (isDesktop() && view !== 'month'));
   if (mapVisible) {
     if (!mapModule) {
-      import('./ui/map.js').then((mod) => { mapModule = mod; mod.renderMap(paneMap); });
+      import('./ui/map.js').then((mod) => { mapModule = mod; mod.renderMap(paneMap, { wholeTrip: view === 'map' }); });
     } else {
-      mapModule.renderMap(paneMap);
+      mapModule.renderMap(paneMap, { wholeTrip: view === 'map' });
     }
   }
 }

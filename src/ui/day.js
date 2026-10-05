@@ -10,7 +10,6 @@ import { renderPlan } from './plan.js';
 
 let mode = (() => { try { return localStorage.getItem('trip.dayMode') || 'group'; } catch { return 'group'; } })();
 
-document.addEventListener('plan-open-day', () => { mode = 'group'; });
 
 const MODES = [['group', 'By group'], ['person', 'By person'], ['plan', 'By plan']];
 const modeSwitch = (root, conflicts) => h('div', { class: 'seg', role: 'group', 'aria-label': 'Show by' },
@@ -19,12 +18,7 @@ const modeSwitch = (root, conflicts) => h('div', { class: 'seg', role: 'group', 
 export function renderDay(root, conflicts) {
   clear(root);
   const m = state.model;
-  if (mode === 'plan') {
-    // The whole trip by kind of plan; no date picker
-    root.append(h('div', { class: 'row', style: { marginBottom: '10px' } }, modeSwitch(root, conflicts)));
-    renderPlan(root);
-    return;
-  }
+
   const date = state.date;
   const days = tripDays(m, jpNow().date);
   const today = jpNow().date;
@@ -63,6 +57,8 @@ export function renderDay(root, conflicts) {
   const pass = makePass(m, state.filters, { ignoreDates: true });
   const only = selectedPeople(m, state.filters);
   const flaggedIds = new Set(conflicts.filter((c) => c.date === date).flatMap((c) => c.itemIds));
+
+  if (mode === 'plan') { renderPlan(root, date, { pass, only }); return; } // the day, condensed for the whole group
 
   if (mode === 'group') {
     const groups = dayGroups(m, date, { pass, onlyPeople: only });

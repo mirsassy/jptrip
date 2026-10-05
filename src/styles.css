@@ -70,7 +70,7 @@ body[data-view="map"] .pane-main { display: none; }
 body[data-view="map"] .pane-map { display: block; }
 
 nav.bottom {
-  display: grid; grid-template-columns: repeat(6, 1fr); background: var(--surface); border-top: 1px solid var(--line);
+  display: grid; grid-template-columns: repeat(5, 1fr); background: var(--surface); border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom); z-index: 5;
 }
 nav.bottom a, nav.top-nav a {
@@ -310,3 +310,29 @@ body[data-view="setup"] .sync-pill, body[data-view="setup"] header .icon-btn, bo
 /* Booked plans draw above ideas on the map */
 .maplibregl-marker.pin { z-index: 2; }
 .maplibregl-marker.pin.idea { z-index: 1; }
+/* Month cell details: each opens its plan */
+.mdetail { display: flex; flex-direction: column; gap: 1px; width: 100%; min-width: 0; text-align: left; font: inherit; color: inherit; background: none; border: 0; padding: 1px 2px; border-radius: 4px; cursor: pointer; }
+.mdetail:hover, .mdetail:focus-visible { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.mhotel, .mres, .mflight { font-size: .62rem; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.mhotel { color: var(--muted); }
+.mres { color: var(--accent); }
+.mflight { font-weight: 600; }
+@media (min-width: 700px) { .mhotel, .mres, .mflight { font-size: .74rem; } }
+/* Month view: the calendar gets the whole width (no map beside it) */
+@media (min-width: 1000px) {
+  body[data-view="month"] .pane-map { display: none; }
+  body[data-view="month"] main { grid-template-columns: 1fr !important; }
+  body[data-view="month"] .pane-main { max-width: none; }
+  body[data-view="month"] .mcell { min-height: 110px; }
+}
+/* Floating Map button: bottom left, above the tab bar on phones */
+.fab.fab-map { right: auto; left: 16px; background: var(--surface); color: var(--text); border: 1px solid var(--line); }
+@media (min-width: 1000px) { .fab.fab-map { left: 24px; right: auto; } }
+/* Direction arrows on travel lines */
+.route-arrow { color: #5b5550; font-size: 16px; line-height: 1; text-shadow: 0 0 3px #fff, 0 0 3px #fff; pointer-events: none; }
+.route-arrow.implied { font-size: 13px; opacity: .8; }
+/* A popup always sits above the pins (pins have z-index 1–2) */
+.maplibregl-popup { z-index: 5; }
+.plan-day .plan-list li { grid-template-columns: 74px 1fr auto; }
+.plan-item { text-align: left; background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; min-width: 0; }
+.plan-item:hover .ttl { text-decoration: underline; }

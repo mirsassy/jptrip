@@ -2,11 +2,11 @@
 // colored by the people involved. Uses MapLibre with OpenFreeMap tiles (free,
 // no key). Tiles are cached by the service worker only as they are viewed.
 import { h, icon, clear } from './dom.js';
-import { state, setDate, setFilters } from '../lib/store.js';
+import { state, setDate } from '../lib/store.js';
 import { makePass } from '../lib/filters.js';
 import { tripDays, dayGroups } from '../lib/model.js';
 import { fmtDay, fmtShort, jpNow, addDays } from '../lib/dates.js';
-import { conic, whoChips, statusBadge, mapLinks, itemTimeLabel } from './common.js';
+import { conic, whoChips, statusBadge, googleMapsLink, itemTimeLabel } from './common.js';
 import { openEditor } from './forms.js';
 
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
@@ -15,13 +15,14 @@ const JAPAN = { center: [137.5, 36.0], zoom: 4.6 };
 let maplibre = null;
 let map = null;
 let markers = [];
-let allDates = false;
-let showIdeas = true;
+let allDates = false; // the full-screen map opens on the whole trip; the map beside the day view follows the day
+const showIdeas = false; // ideas are listed in the Ideas tab and on each day, not on the map
 let lastFitKey = '';
 let container = null;
 let controls = null;
 let note = null;
 let mapError = false;
+let waitingForIdle = false;
 
 async function loadMaplibre() {
   const base = new URL('./vendor/maplibre/', document.baseURI).href;
@@ -31,7 +32,9 @@ async function loadMaplibre() {
   return import(/* @vite-ignore */ `${base}maplibre-gl.mjs`);
 }
 
-export async function renderMap(root) {
+/** `wholeTrip`: the full-screen map shows the whole trip; the map beside the day view follows the chosen day. */
+export async function renderMap(root, { wholeTrip = false } = {}) {
+  if (wholeTrip !== allDates) { allDates = wholeTrip; lastFitKey = ''; controlsSig = ''; }
   if (!container) {
     container = h('div', { id: 'map', role: 'region', 'aria-label': 'Trip map' });
     controls = h('div', { class: 'map-controls' });
@@ -57,7 +60,9 @@ export async function renderMap(root) {
       return;
     }
   }
-  if (map.loaded() || map.isStyleLoaded()) drawMarkers();
+  // Redraw now if the style is ready, otherwise as soon as the map settles (tiles may still be loading)
+  if (map.isStyleLoaded()) drawMarkers();
+  else if (!waitingForIdle) { waitingForIdle = true; map.once('idle', () => { waitingForIdle = false; drawMarkers(); }); }
   requestAnimationFrame(() => map.resize());
 }
 
@@ -77,24 +82,24 @@ function drawControls() {
   const sig = `${days[0]}|${days.length}|${allDates}|${showIdeas}|${state.filters.kidOnly}`;
   if (sig === controlsSig && slider) {
     // Only the date changed: update in place so a drag on the slider is not interrupted
-    dateLabel.textContent = allDates ? 'All dates' : fmtDay(state.date);
+    dateLabel.textContent = allDates ? 'Whole trip' : fmtDay(state.date);
     if (document.activeElement !== slider) slider.value = idx;
     return;
   }
   controlsSig = sig;
   slider = h('input', { type: 'range', min: 0, max: Math.max(0, days.length - 1), value: idx, 'aria-label': 'Trip day', disabled: allDates,
     oninput: (e) => setDate(days[+e.target.value]) });
-  dateLabel = h('span', { style: { minWidth: '84px', textAlign: 'center', fontWeight: 600, fontSize: '.9rem' }, 'aria-live': 'polite' }, allDates ? 'All dates' : fmtDay(state.date));
+  dateLabel = h('span', { style: { minWidth: '84px', textAlign: 'center', fontWeight: 600, fontSize: '.9rem' }, 'aria-live': 'polite' }, allDates ? 'Whole trip' : fmtDay(state.date));
   clear(controls).append(
     h('div', { class: 'ctl' },
       h('button', { class: 'icon-btn', 'aria-label': 'Previous day', disabled: allDates, onclick: () => setDate(addDays(state.date, -1)) }, icon('chevl', 18)),
       dateLabel,
       h('button', { class: 'icon-btn', 'aria-label': 'Next day', disabled: allDates, onclick: () => setDate(addDays(state.date, 1)) }, icon('chevr', 18)),
       slider),
-    h('div', { class: 'ctl toggle-chips', style: { padding: '4px' } },
-      h('button', { 'aria-pressed': String(allDates), onclick: () => { allDates = !allDates; lastFitKey = ''; drawControls(); drawMarkers(true); } }, 'All dates'),
-      h('button', { 'aria-pressed': String(showIdeas), onclick: () => { showIdeas = !showIdeas; drawControls(); drawMarkers(); } }, icon('idea', 14), 'Ideas'),
-      showIdeas ? h('button', { 'aria-pressed': String(state.filters.kidOnly), onclick: () => setFilters({ kidOnly: !state.filters.kidOnly }) }, icon('kid', 14), 'Kid-friendly') : null));
+  );
+  // The full-screen map shows the whole trip: no day controls there
+  controls.classList.toggle('whole-trip', allDates);
+  if (allDates) clear(controls).append(h('div', { class: 'ctl', style: { padding: '6px 12px', fontWeight: 600 } }, 'Whole trip'));
 }
 
 /** Items to show: for one date, where everyone sleeps that night plus that day's plans. */
@@ -105,7 +110,7 @@ function visibleItems() {
   return m.items.filter((it) => {
     if (!pass(it)) return false;
     if (it.type === 'idea') return showIdeas;
-    if (allDates) return true;
+    if (allDates) return it.type !== 'note'; // whole trip: where we stay, travel and bookings
     if (it.type === 'stay') return it.date <= date && date < it.endDate;
     return it.date === date;
   });
@@ -127,22 +132,32 @@ function popup(it, loc, endLabel) {
     h('div', { class: 'row', style: { margin: '6px 0' } }, statusBadge(it.status), it.type === 'idea' && it.kid === 'Yes' ? h('span', { class: 'chip' }, 'Kid-friendly') : null),
     it.type === 'idea' ? null : whoChips(it.people, { max: 6 }),
     loc.approx ? h('div', { class: 'small muted', style: { marginTop: '6px' } }, 'Pin is at the city center: add an address or paste a map link to place it.') : null,
-    h('div', { class: 'links' }, mapLinks(endLabel ? { ...it, title: endLabel === 'From' ? it.from : it.to, address: '', city: '' } : it, loc),
+    h('div', { class: 'links' }, googleMapsLink(endLabel ? { type: 'stay', title: endLabel === 'From' ? it.from : it.to, loc, address: '', city: '' } : it),
       h('button', { class: 'btn small', onclick: () => openEditor(it.tab, it.raw) }, icon('edit', 14), 'Edit')));
 }
 
+let markersSig = '';
 function drawMarkers(fit = false) {
   if (!map || !maplibre) return;
+  const items = visibleItems();
+  // Nothing changed (e.g. a background sync): keep the pins, so an open popup stays open
+  const sig = `${allDates}|${state.date}|${items.map((it) => `${it.id}:${it.status}:${it.people.join(',')}:${it.loc?.lat},${it.loc?.lng}:${it.fromLoc?.lat}:${it.toLoc?.lat}`).join('|')}`;
+  if (!fit && sig === markersSig && markers.length) return;
+  markersSig = sig;
   markers.forEach((mk) => mk.remove());
   markers = [];
-  const items = visibleItems();
   const points = [];
   const routes = [];
   items.forEach((it) => {
     if (it.type === 'transport') {
       if (it.fromLoc) points.push({ it, loc: it.fromLoc, end: 'From' });
       if (it.toLoc) points.push({ it, loc: it.toLoc, end: 'To' });
-      if (it.fromLoc && it.toLoc) routes.push({ type: 'Feature', properties: { color: it.people.length === 1 ? state.model.peopleByName.get(it.people[0])?.color : '#5b5550' }, geometry: { type: 'LineString', coordinates: [[it.fromLoc.lng, it.fromLoc.lat], [it.toLoc.lng, it.toLoc.lat]] } });
+      if (it.fromLoc && it.toLoc) routes.push(leg(it.fromLoc, it.toLoc, { color: it.people.length === 1 ? state.model.peopleByName.get(it.people[0])?.color : '#5b5550', kind: 'travel', title: it.title, date: it.date }));
+    } else if (it.type === 'stay' && it.loc) {
+      // One pin per hotel, even when it is booked in several rows (e.g. one per family)
+      const same = points.find((p) => p.it.type === 'stay' && p.it.lodging === it.lodging);
+      if (same) same.people = [...new Set([...same.people, ...it.people])];
+      else points.push({ it, loc: it.loc, people: it.people.slice() });
     } else if (it.loc) {
       points.push({ it, loc: it.loc });
     }
@@ -166,15 +181,23 @@ function drawMarkers(fit = false) {
 
   points.forEach((p) => {
     const label = `${p.end ? `${p.end} ` : ''}${p.it.title}`;
-    const el = pinEl(p.it, p.it.people, p.loc.approx, label);
+    const el = pinEl(p.it, p.people || p.it.people, p.loc.approx, label);
     const mk = new maplibre.Marker({ element: el, anchor: 'bottom-left', offset: [p.px[0] - 2, p.px[1] + 2] })
       .setLngLat([p.loc.lng, p.loc.lat])
-      .setPopup(new maplibre.Popup({ offset: [p.px[0] + 12, p.px[1] - 24], maxWidth: '300px' }).setDOMContent(popup(p.it, p.loc, p.end)))
+      .setPopup(new maplibre.Popup({ offset: [p.px[0] + 12, p.px[1] - 24], maxWidth: '300px' }).setDOMContent(popup(p.people ? { ...p.it, people: p.people } : p.it, p.loc, p.end)))
       .addTo(map);
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter') mk.togglePopup(); });
     markers.push(mk);
   });
 
+  // Whole trip: also the moves between stays that have no travel row (e.g. by car), dotted
+  if (allDates) routes.push(...impliedLegs(items));
+  routes.forEach((f) => {
+    const [a, b] = f.geometry.coordinates;
+    if (Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) < 0.02) return; // too short to draw an arrow
+    const el = h('div', { class: `route-arrow ${f.properties.kind}`, title: `${fmtShort(f.properties.date)}: ${f.properties.title}`, 'aria-hidden': 'true' }, '➤');
+    markers.push(new maplibre.Marker({ element: el, rotation: bearing(a, b), rotationAlignment: 'map' }).setLngLat(midpoint(a, b)).addTo(map));
+  });
   const src = map.getSource('routes');
   if (src) src.setData({ type: 'FeatureCollection', features: routes });
 
@@ -200,7 +223,47 @@ function drawMarkers(fit = false) {
 function addRouteLayer() {
   if (map.getSource('routes')) return;
   map.addSource('routes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-  map.addLayer({ id: 'routes', type: 'line', source: 'routes', paint: { 'line-color': ['coalesce', ['get', 'color'], '#5b5550'], 'line-width': 3, 'line-dasharray': [2, 1.5], 'line-opacity': 0.8 } });
+  map.addLayer({ id: 'routes', type: 'line', source: 'routes', filter: ['==', ['get', 'kind'], 'travel'], paint: { 'line-color': ['coalesce', ['get', 'color'], '#5b5550'], 'line-width': 3, 'line-dasharray': [2, 1.5], 'line-opacity': 0.85 } });
+  map.addLayer({ id: 'routes-implied', type: 'line', source: 'routes', filter: ['==', ['get', 'kind'], 'implied'], layout: { 'line-cap': 'round' }, paint: { 'line-color': '#5b5550', 'line-width': 2.5, 'line-dasharray': [0.1, 2], 'line-opacity': 0.7 } });
+}
+
+function leg(from, to, props) {
+  return { type: 'Feature', properties: props, geometry: { type: 'LineString', coordinates: [[from.lng, from.lat], [to.lng, to.lat]] } };
+}
+
+/**
+ * Moves between consecutive stays (per person) in different places, when no travel row
+ * covers them: the drive from one hotel to the next. Same move for several people = one line.
+ */
+function impliedLegs(items) {
+  const stays = items.filter((it) => it.type === 'stay' && it.loc && it.status !== 'Cancelled');
+  const travel = items.filter((it) => it.type === 'transport');
+  const seen = new Set();
+  const out = [];
+  state.model.people.forEach((p) => {
+    const mine = stays.filter((s) => s.people.includes(p.name)).sort((a, b) => a.date.localeCompare(b.date));
+    for (let i = 1; i < mine.length; i++) {
+      const a = mine[i - 1], b = mine[i];
+      if ((a.city || a.title) === (b.city || b.title)) continue;
+      const covered = travel.some((t) => t.people.includes(p.name) && t.date >= a.date && t.date <= b.date);
+      if (covered) continue;
+      const k = `${a.id}>${b.id}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(leg(a.loc, b.loc, { kind: 'implied', title: `${a.city || a.title} → ${b.city || b.title}`, date: b.date }));
+    }
+  });
+  return out;
+}
+
+const midpoint = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+
+/** Compass bearing from a to b in Web Mercator, so the arrow points along the line on screen. */
+function bearing(a, b) {
+  const y = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+  const dx = b[0] - a[0];
+  const dy = (y(b[1]) - y(a[1])) * (180 / Math.PI);
+  return -(Math.atan2(dy, dx) * 180) / Math.PI; // clockwise degrees; the ➤ glyph points east
 }
 
 /** Called on every state change while the map is visible. */
