@@ -19,7 +19,6 @@
 
 var TABS = {
   'People': { key: 'Name' },
-  'Groups': { key: 'Group' },
   'Stays': { key: 'ID', prefix: 'S' },
   'Transport': { key: 'ID', prefix: 'T' },
   'Reservations': { key: 'ID', prefix: 'R' },

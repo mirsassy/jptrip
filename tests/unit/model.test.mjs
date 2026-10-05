@@ -75,7 +75,7 @@ describe('model', () => {
 });
 
 describe('groups and families', () => {
-  it('reads groups from the Groups tab; a child’s parents are the adults in their groups', () => {
+  it('reads groups from the People tab Group column; a child’s parents are the adults in their groups', () => {
     const m = setup();
     expect(m.groups.map((g) => [g.name, g.adults, g.children])).toEqual([
       ['Avery family', ['Avery', 'Blake'], ['Kit', 'Robin']],
@@ -84,8 +84,10 @@ describe('groups and families', () => {
     expect(m.peopleByName.get('Kit')).toMatchObject({ child: true, age: 7, groups: ['Avery family'], parents: ['Avery', 'Blake'] });
   });
 
-  it('"Everyone" is always the whole People tab, whatever the Groups row lists', () => {
-    const m = setup([['Groups', { Group: 'Everyone', Members: 'Avery' }]]);
+  it('"Everyone" is always the whole People tab; a person can be in several groups', () => {
+    const m = setup([['People', { Name: 'Gale', Group: 'Everyone, Casey and Drew, Hikers' }]]);
+    expect(m.groups.find((g) => g.name === 'Casey and Drew').members).toEqual(['Casey', 'Drew', 'Gale']);
+    expect(m.groups.find((g) => g.name === 'Hikers').members).toEqual(['Gale']);
     expect(m.resolveWho('Everyone').people).toHaveLength(9);
     expect(m.groups.some((g) => g.name === 'Everyone')).toBe(false);
   });

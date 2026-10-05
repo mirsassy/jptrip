@@ -394,12 +394,13 @@ test('groups: in the Settings dialog, Who chips, party summary, and child checks
   await expect(fam).toContainText('Children: Kit (7), Robin (3)');
   await expect(fam).toContainText('Not in a group:');
 
-  // Add Gale to the Casey and Drew group from the app
-  await fam.getByRole('button', { name: 'Edit Casey and Drew' }).click();
-  const grp = page.getByRole('dialog', { name: 'Edit group' });
-  await grp.getByRole('button', { name: 'Gale', exact: true }).click();
-  await grp.getByRole('button', { name: 'Save' }).click();
-  await expect.poll(async () => (await sheetRows('Groups')).find((r) => r.Group === 'Casey and Drew').Members).toBe('Casey, Drew, Gale');
+  // Put Gale in the Casey and Drew group from the app (People tab, Group column)
+  await expect(settings.locator('header, .sheet-body').first()).not.toContainText('null');
+  await fam.getByRole('button', { name: 'Edit Gale' }).click();
+  const person = page.getByRole('dialog', { name: 'Edit person' });
+  await person.getByRole('group', { name: 'Group' }).getByRole('combobox').selectOption('Casey and Drew');
+  await person.getByRole('button', { name: 'Save' }).click();
+  await expect.poll(async () => (await sheetRows('People')).find((r) => r.Name === 'Gale').Group).toBe('Casey and Drew');
   await settings.getByRole('button', { name: 'Close' }).first().click();
 
   // Booking for a group: chip selects parents and children; party size fills itself in

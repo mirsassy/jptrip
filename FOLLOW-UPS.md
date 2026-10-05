@@ -7,14 +7,17 @@ Open decisions and things that could not be verified while building the app. Iti
 - [x] Turn on GitHub Pages (done; the app is published).
 - [x] Build the web app address into the app (GitHub variable TRIP_SCRIPT_URL; done).
 - [ ] Everything in Part 2 of [SETUP.md](SETUP.md): add and deploy the Apps Script, make yourself administrator, add the family.
-- [ ] Try the app on a real iPhone and a real Android phone (install, offline, add an entry, sign out).
 - [ ] Turn on 2-step verification for the Google and GitHub accounts.
 - [ ] Optional: create an Anthropic API key with a spend limit and set it from the Sheet menu (SETUP step 5). When the "Trip app uploads" folder appears in Drive, move it into the Claude folder.
 
+## Come back to
+
+- [ ] **Saving an uploaded file failed** on the first real import (reading worked). Find the Drive error (likely the Drive permission or folder creation) and fix.
+
 ## Design decisions to revisit
 
-- [ ] **Groups replace households.** Families now live in the Groups tab (moved there: Mirstavrev, Mirsaidi, Khaleghi, Rakane). The People tab's Household column is no longer used and can be deleted. A child's parents are the adults who share any group with them.
-- [ ] **Unknown names in Groups.** "Niloofar & Farbod", "Mom" and "Tony & Vahaub" list people not in the People tab (or no one): confirm who they are.
+- [ ] **Groups live in the People tab** (Group column; several allowed, comma-separated). The Groups tab is gone. A child's parents are the adults who share a group with them; "Everyone" is always the whole People tab.
+
 - [ ] **Children's ages** come from the People tab Notes ("Age 7").
 - [ ] **Party size fills in from Who** only when left blank; a different number is kept and flagged under Issues.
 

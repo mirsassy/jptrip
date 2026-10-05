@@ -159,7 +159,7 @@ export function renderSettings(root, { firstRun = false, inDialog = false } = {}
   if (firstRun) { renderSignIn(root); return; }
   clear(root);
   root.append(
-    inDialog ? null : h('h2', { style: { margin: '4px 0 8px', fontSize: '1.15rem' } }, 'Settings'),
+    ...(inDialog ? [] : [h('h2', { style: { margin: '4px 0 8px', fontSize: '1.15rem' } }, 'Settings')]),
     ...settingsCards().filter(Boolean),
     h('div', { class: 'card' },
       h('h3', { style: { marginTop: 0 } }, 'Offline maps'),

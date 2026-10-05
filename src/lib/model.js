@@ -48,17 +48,17 @@ export function buildModel(data) {
   const peopleByLc = new Map(people.map((p) => [p.name.toLowerCase(), p]));
   const allNames = people.map((p) => p.name);
 
+  // Groups come from the People tab's Group column (a person may list several, comma-separated).
+  // "Everyone" is never a group of its own: it always means the whole People tab.
   const groups = [];
-  rows('Groups').forEach((r) => {
-    const name = norm(r.Group);
-    if (!name) return;
-    const members = norm(r.Members).split(/[,;]/).map(lc).filter(Boolean).map((n) => peopleByLc.get(n)?.name).filter(Boolean);
-    groups.push({ name, members, notes: norm(r.Notes), raw: r });
+  const groupByLc = new Map();
+  people.forEach((p) => {
+    norm(p.raw.Group).split(/[,;]/).map(norm).filter((g) => g && g.toLowerCase() !== 'everyone').forEach((g) => {
+      if (!groupByLc.has(g.toLowerCase())) { const grp = { name: g, members: [] }; groupByLc.set(g.toLowerCase(), grp); groups.push(grp); }
+      const grp = groupByLc.get(g.toLowerCase());
+      if (!grp.members.includes(p.name)) grp.members.push(p.name);
+    });
   });
-  // "Everyone" is always the whole People tab, whatever a Groups row of that name lists
-  const realGroups = groups.filter((g) => g.name.toLowerCase() !== 'everyone');
-  groups.length = 0;
-  groups.push(...realGroups);
   // Groups double as families: a child's parents are the adults who share a group with them
   groups.forEach((g) => {
     g.adults = g.members.filter((n) => !peopleByLc.get(n.toLowerCase()).child);

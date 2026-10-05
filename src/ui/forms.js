@@ -52,10 +52,9 @@ function fieldsFor(tab) {
     case 'Notes': return [F('Date', 'date', { half: true }), F('City', 'city', { half: true }), F('Who', 'who'), F('Note', 'textarea', { req: true })];
     case 'People': return [
       F('Name', 'text', { req: true }), F('Adult or child', 'select', { opts: () => ['Adult', 'Child'] }),
-      F('Color (hex)', 'color'),
+      F('Group', 'group', { hint: 'e.g. their family' }), F('Color (hex)', 'color'),
       F('Notes', 'textarea', { hint: 'for a child, e.g. "Age 7"' }),
     ];
-    case 'Groups': return [F('Group', 'text', { req: true }), F('Members', 'who', { peopleOnly: true, req: true }), F('Notes', 'textarea')];
     default: return [];
   }
 }
@@ -169,7 +168,7 @@ function collect(form, fields, values) {
 function fieldEl(f, values, pendingCities, tab) {
   const label = f.label || (f.type === 'location' ? 'Map location' : f.col);
   // Fields with several controls use a div: a <label> would forward taps on it to the first button inside.
-  const multi = ['who', 'location', 'datetime', 'city', 'place', 'attachment'].includes(f.type);
+  const multi = ['who', 'location', 'datetime', 'city', 'place', 'attachment', 'group'].includes(f.type);
   const wrap = h(multi ? 'div' : 'label', { class: 'field', dataset: { col: f.col }, role: multi ? 'group' : null, 'aria-label': multi ? label : null }, h('span', null, label, f.req ? ' *' : '', f.hint ? h('span', { class: 'hint' }, ` (${f.hint})`) : null));
   const v = values[f.col] ?? '';
   const name = f.col;
@@ -244,6 +243,18 @@ function fieldEl(f, values, pendingCities, tab) {
         if (val && f.type === 'city' && addToLists.querySelector('input').checked) pendingCities.add(val);
         return { [f.col]: val };
       };
+      break;
+    }
+    case 'group': {
+      // A person's group, usually their family (parents and children). Using its name in Who includes everyone in it.
+      const names = state.model.groups.map((x) => x.name);
+      const sel = h('select', { name }, h('option', { value: '' }, 'No group'), names.map((n) => h('option', { value: n }, n)), h('option', { value: '__new' }, 'New group…'));
+      const other = h('input', { type: 'text', placeholder: 'e.g. Saito family', class: 'hidden', style: { marginTop: '6px' } });
+      if (v && !names.includes(String(v))) sel.append(h('option', { value: v }, v));
+      sel.value = String(v);
+      sel.addEventListener('change', () => { other.classList.toggle('hidden', sel.value !== '__new'); if (sel.value === '__new') other.focus(); });
+      input = h('div', null, sel, other);
+      wrap._get = () => ({ [f.col]: sel.value === '__new' ? other.value.trim() : sel.value });
       break;
     }
     case 'who': {
@@ -388,7 +399,6 @@ export function openAddMenu() {
     h('div', { class: 'section-title' }, 'Less often'),
     h('div', { class: 'row' },
       h('button', { class: 'btn small', onclick: () => { s.close(); openEditor('People'); } }, 'Person'),
-      h('button', { class: 'btn small', onclick: () => { s.close(); openEditor('Groups'); } }, 'Group'),
       h('button', { class: 'btn small', onclick: () => { s.close(); openListAdd(); } }, 'Dropdown choice (Lists)')));
   const s = sheet('Add to the trip', body);
 }

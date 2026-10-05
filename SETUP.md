@@ -8,7 +8,7 @@ Setup is split in two: what is already done, and what only you, the trip organiz
 
 | What | Who | Where |
 |---|---|---|
-| Added the app's columns to the trip Sheet (ID, Lat/Lng, Last edited by, Attachment on Stays/Transport/Reservations, Address on Restaurant ideas, City Lat/Lng on Lists), city coordinates, and the families as groups (Groups tab) | Claude | The trip Sheet |
+| Added the app's columns to the trip Sheet (ID, Lat/Lng, Last edited by, Attachment on Stays/Transport/Reservations, Address on Restaurant ideas, City Lat/Lng on Lists), city coordinates, and the families as groups (People tab, Group column) | Claude | The trip Sheet |
 | Wrote the app, the Apps Script (`apps-script/Code.gs`), tests and this documentation, including importing bookings from files or pasted text | Claude | This repository |
 | Pushed the code to this public repository with no real names, dates, emails or secrets (tests use a made-up family and trip) | Claude | GitHub |
 | Set up automatic testing and publishing: every push to `main` runs the tests, then publishes the app | Claude | `.github/workflows/pages.yml` |
@@ -95,7 +95,7 @@ Uploaded files are kept in a Drive folder named **Trip app uploads**, created th
 
 ### 7. Add the family (1 min each)
 
-First, put each family in a group: in the Sheet (Groups tab: group name, then members such as "Ken, Yumi, Aiko") or in the app (**Settings → Groups → Add a group**). A child's parents are the adults in the same group. Put a child's age in their Notes ("Age 7"). "Everyone" is automatic: it always means the whole People tab.
+First, put each family in a group: in the Sheet (People tab, **Group** column, e.g. "Saito family" for both parents and their children) or in the app (**Settings → Groups**, pencil next to a person). A child's parents are the adults in the same group. Put a child's age in their Notes ("Age 7"). "Everyone" is automatic: it always means the whole People tab.
 
 Then give each adult a sign-in. Children don't get one; their parents add and change things for them.
 

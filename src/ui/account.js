@@ -248,9 +248,10 @@ export function familiesCard() {
   const m = state.model;
   const childLabel = (p) => (p.age !== null ? `${p.name} (${p.age})` : p.name);
   const single = m.people.filter((p) => !p.groups.length);
+  const edit = (p) => h('button', { class: 'icon-btn', 'aria-label': `Edit ${p.name}`, onclick: () => openEditor('People', p.raw) }, icon('edit', 16));
   return h('div', { class: 'card', id: 'families' },
     h('h3', { style: { marginTop: 0 } }, 'Groups'),
-    h('p', { class: 'small muted' }, 'A group’s name works in any Who field. Put parents and their children in one group: the app then checks a child is never booked without one of them. “Everyone” is always the whole People tab.'),
+    h('p', { class: 'small muted' }, 'Groups come from the People tab’s Group column. A group’s name works in any Who field. Put parents and their children in one group: the app then checks a child is never booked without one of them. “Everyone” is always the whole People tab.'),
     m.groups.length ? null : h('p', { class: 'small' }, 'No groups yet.'),
     m.groups.map((g) => h('div', { class: 'item-row', style: { cursor: 'default' } },
       h('span', { class: 'muted' }, icon('stay', 18)),
@@ -258,12 +259,11 @@ export function familiesCard() {
         h('div', { style: { fontWeight: 600 } }, g.name),
         h('div', { class: 'small' }, m.partySummary(g.members) || 'No members'),
         g.children.length ? h('div', { class: 'small muted' }, 'Children: ', g.children.map((n) => childLabel(m.peopleByName.get(n))).join(', ')) : null,
-        h('div', { class: 'chips', style: { marginTop: '6px' } }, g.members.map((n) => personChip(n)))),
-      h('button', { class: 'icon-btn', 'aria-label': `Edit ${g.name}`, onclick: () => openEditor('Groups', g.raw) }, icon('edit', 16)))),
+        h('div', { class: 'chips', style: { marginTop: '6px' } }, g.members.map((n) => h('span', { class: 'row', style: { gap: '0' } }, personChip(n), edit(m.peopleByName.get(n)))))),
+      h('span'))),
     single.length ? h('div', { class: 'small', style: { marginTop: '10px' } }, h('span', { class: 'muted' }, 'Not in a group: '),
-      h('span', { class: 'chips', style: { display: 'inline-flex' } }, single.map((p) => personChip(p.name)))) : null,
+      h('span', { class: 'chips', style: { display: 'inline-flex' } }, single.map((p) => h('span', { class: 'row', style: { gap: '0' } }, personChip(p.name), edit(p))))) : null,
     h('div', { class: 'row', style: { marginTop: '12px' } },
-      h('button', { class: 'btn small', onclick: () => openEditor('Groups') }, icon('plus', 16), 'Add a group'),
       h('button', { class: 'btn small', onclick: () => openEditor('People') }, icon('plus', 16), 'Add a person (adult or child)')));
 }
 
