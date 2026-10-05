@@ -129,4 +129,4 @@ On one iPhone and one Android phone: install, sign in, add a note, turn on airpl
 | "Reading bookings is not turned on yet" | Do step 5. |
 | "The Claude API key in the Sheet is not working" | Make a new key in the Anthropic console and set it again (step 5). Also check the account has credit. |
 | After updating the script, Google asks for permission again | Expected when the script needs a new permission . Allow it, then deploy a new version. |
-| The app didn't update after a push | Check the Actions tab is green; then on the phone tap **Reload** on the "new version" banner. |
+| The app didn't update after a push | Check the Actions tab is green; then on the phone pull the screen down from the top and tap **Reload now**. |

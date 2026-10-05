@@ -298,7 +298,7 @@ export function settingsCards() {
         h('dt', null, 'Waiting to sync'), h('dd', null, `${state.queue.length} change(s)`),
         h('dt', null, 'Connection'), h('dd', null, state.online ? 'Online' : 'Offline')),
       h('div', { class: 'row', style: { marginTop: '12px' } },
-        h('button', { class: 'btn', onclick: () => sync({ apply: true }) }, icon('sync', 18), 'Sync now'),
+        h('button', { class: 'btn', onclick: () => sync() }, icon('sync', 18), 'Sync now'),
         me.role === 'admin' && safeUrl(state.data?.sheetUrl) ? h('a', { class: 'btn', href: safeUrl(state.data.sheetUrl), target: '_blank', rel: 'noopener' }, 'Open the Sheet', icon('ext', 14)) : null)),
     accountCard(),
     me.role === 'admin' ? tripDatesCard() : null,

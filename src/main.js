@@ -3,7 +3,7 @@ import { applyTheme } from './lib/theme.js';
 
 applyTheme();
 import { h, icon, clear, toast, sheet } from './ui/dom.js';
-import { state, subscribe, init, sync, setConfig, applyPendingUpdate } from './lib/store.js';
+import { state, subscribe, init, sync, setConfig } from './lib/store.js';
 import { findConflicts } from './lib/conflicts.js';
 import { activeFilterCount } from './lib/filters.js';
 import { ago, fmtJstStamp } from './lib/dates.js';
@@ -12,6 +12,7 @@ import { renderDay } from './ui/day.js';
 import { renderMonth } from './ui/month.js';
 import { renderList, renderIdeas, renderIssues, renderSettings, openFilters } from './ui/views.js';
 import { openAddMenu } from './ui/forms.js';
+import { pullToRefresh } from './ui/pull.js';
 
 const VIEWS = [
   ['day', 'Day', 'day'],
@@ -22,10 +23,7 @@ const VIEWS = [
 ];
 
 const app = document.getElementById('app');
-const syncPill = h('button', { class: 'sync-pill', 'aria-live': 'polite', onclick: () => sync({ apply: true }) });
-// Someone else changed the trip while this person was using the app: offer it, don't redraw under them
-const updateBar = h('div', { class: 'update-bar', role: 'status', hidden: true },
-  h('span', null, 'The trip was updated.'), h('button', { class: 'btn small primary', onclick: () => applyPendingUpdate() }, 'Show changes'));
+const syncPill = h('button', { class: 'sync-pill', 'aria-live': 'polite', onclick: () => refresh() });
 const filterBtn = h('button', { class: 'icon-btn', 'aria-label': 'Filters', onclick: openFilters }, icon('filter'));
 const topNav = h('nav', { class: 'top-nav', 'aria-label': 'Views' });
 const bottomNav = h('nav', { class: 'bottom', 'aria-label': 'Views' });
@@ -36,7 +34,6 @@ let lastView = 'day';
 const paneMain = h('section', { class: 'pane pane-main', 'aria-live': 'off' });
 const paneMap = h('section', { class: 'pane pane-map' });
 const fab = h('button', { class: 'fab', 'aria-label': 'Add to the trip', onclick: openAddMenu }, icon('plus', 26));
-document.body.append(updateBar);
 app.append(header, h('main', null, paneMain, paneMap), bottomNav);
 // Floating Map button: opens the whole-trip map; tapped again on the map, it goes back
 const mapFab = h('button', { class: 'fab fab-map', 'aria-label': 'Trip map', onclick: () => {
@@ -123,7 +120,6 @@ function render() {
   // Issue checks run once per change of the trip data, not on every redraw
   if (conflictsFor !== state.modelVersion) { conflicts = findConflicts(state.model); conflictsFor = state.modelVersion; }
   renderChrome(view);
-  updateBar.hidden = !state.pendingData || view === 'setup';
   fab.classList.toggle('hidden', view === 'setup' || (view === 'map' && !isDesktop()) || needsSetup());
   mapFab.classList.toggle('hidden', !(view === 'month' || view === 'map') || needsSetup()); // the trip map opens from the Month view
   mapFab.setAttribute('aria-pressed', String(view === 'map'));
@@ -178,26 +174,56 @@ matchMedia('(min-width: 1000px)').addEventListener('change', render);
 
 init().then(() => {
   render();
-  sync({ apply: true });
-  setInterval(() => { if (document.visibilityState === 'visible') sync(); }, 5 * 60 * 1000);
+  sync(); // opening the app; after that, coming back to it, a pull-down or the sync pill
   setInterval(() => renderChrome(route()), 60 * 1000); // keep "synced x min ago" fresh
 });
 
+// Pull down from the top (or tap the sync pill): first look for a new version of the app, then sync
+pullToRefresh(paneMain, (say) => refresh(say));
+async function refresh(say = () => {}) {
+  if (needsSetup()) return;
+  if (navigator.onLine && swReg) {
+    say('Checking for a new version…');
+    try { await Promise.race([swReg.update(), new Promise((r) => setTimeout(r, 5000))]); } catch { /* offline or blocked: just sync */ }
+    const waiting = swReg.waiting || swReg.installing;
+    if (waiting) { await installed(waiting); if (swReg.waiting) { offerUpdate(swReg.waiting); return; } }
+  }
+  say('Syncing…');
+  await sync();
+}
+
+/** Resolves once a new version has finished downloading (or failed). */
+function installed(sw) {
+  if (sw.state !== 'installing') return Promise.resolve();
+  return new Promise((r) => {
+    sw.addEventListener('statechange', () => { if (sw.state !== 'installing') r(); });
+    setTimeout(r, 15000);
+  });
+}
+
+// Front and centre: a dialog, not a banner that is easy to miss
+let updateDlg = null;
+function offerUpdate(sw) {
+  if (updateDlg) return;
+  updateDlg = sheet('New version available', h('div', null,
+    h('p', null, 'An updated version of the trip app is ready. Reload to start using it; your trip data stays on this device.'),
+    h('div', { class: 'form-actions' },
+      h('button', { class: 'btn', onclick: () => updateDlg.close() }, 'Later'),
+      h('button', { class: 'btn primary', onclick: () => { sw.postMessage('skipWaiting'); } }, 'Reload now'))),
+    { onClose: () => { updateDlg = null; } });
+  updateDlg.el.classList.add('center');
+}
+
 // Service worker: offline app shell and viewed map tiles
+let swReg = null;
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   navigator.serviceWorker.register('./sw.js').then((reg) => {
+    swReg = reg;
+    if (reg.waiting && navigator.serviceWorker.controller) offerUpdate(reg.waiting); // "Later" last time
     reg.addEventListener('updatefound', () => {
       const sw = reg.installing;
       sw?.addEventListener('statechange', () => {
-        if (sw.state === 'installed' && navigator.serviceWorker.controller) {
-          // Front and centre: a dialog, not a banner that is easy to miss
-          const dlg = sheet('New version available', h('div', null,
-            h('p', null, 'An updated version of the trip app is ready. Reload to start using it; your trip data stays on this device.'),
-            h('div', { class: 'form-actions' },
-              h('button', { class: 'btn', onclick: () => dlg.close() }, 'Later'),
-              h('button', { class: 'btn primary', onclick: () => { sw.postMessage('skipWaiting'); } }, 'Reload now'))));
-          dlg.el.classList.add('center');
-        }
+        if (sw.state === 'installed' && navigator.serviceWorker.controller) offerUpdate(sw);
       });
     });
   }).catch(() => toast('Offline mode is not available in this browser.'));

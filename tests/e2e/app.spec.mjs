@@ -597,18 +597,28 @@ test('by group: one card per group from the People tab, then people in no group'
   await expect(page.getByRole('region', { name: /^Not in a group, Sapporo: Emery, Frankie, Gale$/ })).toBeVisible();
 });
 
-test('someone else\'s change waits behind "Show changes" instead of redrawing under the person', async ({ page, context }) => {
+/** Pulls the view down from the top with a finger, like a person refreshing. */
+async function pullDown(page) {
+  await page.evaluate(async () => {
+    const el = document.querySelector('.pane-main');
+    el.scrollTop = 0;
+    const t = (y) => [new Touch({ identifier: 1, target: el, clientX: 150, clientY: y })];
+    el.dispatchEvent(new TouchEvent('touchstart', { touches: t(150), bubbles: true, cancelable: true }));
+    for (let y = 170; y <= 450; y += 40) el.dispatchEvent(new TouchEvent('touchmove', { touches: t(y), bubbles: true, cancelable: true }));
+    el.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: t(450), bubbles: true, cancelable: true }));
+  });
+}
+
+test('others\' changes show on a pull-down, not while the person is using the app', async ({ page, context }) => {
   await open(page, context);
   await page.getByRole('button', { name: /Fri, Mar 8/ }).click();
   await expect(page.getByText('Seafood dinner', { exact: true })).toBeVisible();
   await api({ action: 'upsert', tab: 'Reservations', values: { ID: 'R-1', Name: 'Seafood feast' } });
-  await page.evaluate(() => window.dispatchEvent(new Event('online'))); // a background sync
-  const bar = page.getByRole('status').filter({ hasText: 'The trip was updated.' });
-  await expect(bar).toBeVisible();
-  await expect(page.getByText('Seafood dinner', { exact: true })).toBeVisible(); // not changed yet
-  await bar.getByRole('button', { name: 'Show changes' }).click();
+  await page.evaluate(() => window.dispatchEvent(new Event('online'))); // no edits waiting: no sync
+  await page.waitForTimeout(800);
+  await expect(page.getByText('Seafood dinner', { exact: true })).toBeVisible();
+  await pullDown(page);
   await expect(page.getByText('Seafood feast', { exact: true })).toBeVisible();
-  await expect(bar).toBeHidden();
 });
 
 test('if the browser loses its saved copy, the app still opens with the trip (backup copy)', async ({ page, context }) => {

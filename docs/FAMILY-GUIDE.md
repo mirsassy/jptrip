@@ -88,7 +88,9 @@ To change something, tap the pencil next to it. To cancel a booking, open it and
 
 ## Without internet
 
-The app opens and shows everything from the last sync. The top bar shows when that was ("Synced 5 min ago"). You can still add and edit things: they are saved on your phone and sent automatically the next time you open the app with internet.
+The app gets the latest plans when you open it (or come back to it), and when you pull the screen down from the top and let go. Pulling down also checks for a new version of the app first. Nothing changes under you while you're reading.
+
+Offline, the app opens and shows everything from the last sync. The top bar shows when that was ("Synced 5 min ago"). You can still add and edit things: they are saved on your phone and sent automatically the next time you open the app with internet.
 
 The trip map works offline for areas you have already looked at, so before a day with patchy signal, open that area on the map while you have Wi-Fi.
 
@@ -104,4 +106,5 @@ The trip map works offline for areas you have already looked at, so before a day
 - **"Too many wrong PINs"**: wait 15 minutes, or ask the trip organizer to unlock you.
 - **"You were signed out"**: your PIN was reset or your access changed. Sign in again with the PIN the organizer gives you.
 - **A new version of the app is ready**: tap **Reload now** in the message that appears.
+- **Not seeing someone's latest change**: pull the screen down from the top and let go.
 - Anything else: tap the sync button at the top, or ask the trip organizer.

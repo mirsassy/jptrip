@@ -58,10 +58,11 @@ export async function init() {
   }
   rebuild();
   emit();
-  window.addEventListener('online', () => { state.online = true; emit(); sync(); });
+  // Back online: send edits made offline (reading the trip waits for opening the app or a pull-down)
+  window.addEventListener('online', () => { state.online = true; emit(); if (state.queue.length) sync(); });
   window.addEventListener('offline', () => { state.online = false; emit(); });
   // Coming back to the app is like opening it: show the latest at once
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sync({ apply: true }); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sync(); });
 }
 
 export function setConfig(c) {
@@ -96,25 +97,13 @@ function sameTrip(a, b) {
   return JSON.stringify({ ...a, serverTime: 0 }) === JSON.stringify({ ...b, serverTime: 0 });
 }
 
-/** Shows the changes someone else made, held back while the app was in use. */
-export function applyPendingUpdate() {
-  if (!state.pendingData) return;
-  state.data = state.pendingData;
-  state.pendingData = null;
-  persist();
-  rebuild();
-  emit();
-  refreshWeatherNow();
-}
-
 let syncPromise = null;
-/** Sends queued edits in order, then reads the whole Sheet. */
 /**
- * `apply`: show what the Sheet sends right away (opening the app, tapping sync, after your own
- * edits). Otherwise (background syncs) someone else's changes wait behind a "Show changes" banner,
- * so the screen never changes under the person using it.
+ * Sends queued edits in order, then reads the whole Sheet. Runs when the app is opened or
+ * comes back to the screen, on a pull-down, after the person's own edits, and when edits made
+ * offline can be sent; never on a timer, so the screen does not change under the person using it.
  */
-export function sync({ apply = false } = {}) {
+export function sync() {
   if (syncPromise) return syncPromise;
   if (!state.config.url || !state.config.token) return Promise.resolve();
   // Offline: don't wait on a request that cannot succeed; the app runs from the device's copy
@@ -149,9 +138,9 @@ export function sync({ apply = false } = {}) {
       const res = await callApi(state.config, 'read');
       if (started !== epoch) return;
       if (!sameTrip(state.data, res.data)) {
-        if (!state.data || apply || changed) { state.data = res.data; state.pendingData = null; changed = true; }
-        else state.pendingData = res.data;
-      } else state.pendingData = null;
+        state.data = res.data;
+        changed = true;
+      }
       if (res.me && JSON.stringify(res.me) !== JSON.stringify(state.config.me)) setConfig({ me: res.me });
       state.lastSynced = Date.now();
       state.error = null;
@@ -292,7 +281,7 @@ export async function eraseThisDevice({ keepUrl = false } = {}) {
   ['trip.config.v1', 'trip.filters.v1', 'trip.dayMode', 'trip.dayMode2', BACKUP_KEY].forEach((k) => { try { localStorage.removeItem(k); } catch { /* ignore */ } });
   try { await clearIdb(); } catch { /* ignore */ }
   try { if ('caches' in window) await caches.delete('map-tiles'); } catch { /* ignore */ }
-  Object.assign(state, { config: keepUrl && url ? { url } : {}, filters: loadFilters(), data: null, pendingData: null, lastSynced: 0, queue: [], failedOps: [], weather: {}, date: null, dateAuto: true });
+  Object.assign(state, { config: keepUrl && url ? { url } : {}, filters: loadFilters(), data: null, lastSynced: 0, queue: [], failedOps: [], weather: {}, date: null, dateAuto: true });
   if (keepUrl && url) saveConfig(state.config);
   rebuild();
   emit();
