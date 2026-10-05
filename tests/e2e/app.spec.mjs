@@ -285,7 +285,7 @@ test('map: pins for the chosen day link to Google Maps and Apple Maps', async ({
   await page.locator('nav a[href="#map"]:visible').click();
   await expect(page.locator('.map-controls')).toContainText('Fri, Mar 8');
   await expect(page.locator('.map-note')).toContainText('Hakodate: everyone');
-  const pin = page.getByRole('button', { name: 'Seafood dinner' });
+  const pin = page.getByRole('button', { name: 'Seafood dinner', exact: true });
   await expect(pin).toBeVisible();
   await pin.click();
   const popup = page.locator('.maplibregl-popup');
