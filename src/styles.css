@@ -336,3 +336,15 @@ body[data-view="setup"] .sync-pill, body[data-view="setup"] header .icon-btn, bo
 .plan-day .plan-list li { grid-template-columns: 74px 1fr auto; }
 .plan-item { text-align: left; background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; min-width: 0; }
 .plan-item:hover .ttl { text-decoration: underline; }
+/* Idea types: restaurants (red) and activities (green), so the two are easy to tell apart */
+.type-dot { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: #fff; background: #6b655e; vertical-align: -5px; }
+.type-dot.type-restaurant { background: #b7282e; }
+.type-dot.type-activity { background: #2e7d4f; }
+.ideas-day.type-restaurant { border-left: 4px solid #b7282e; }
+.ideas-day.type-activity { border-left: 4px solid #2e7d4f; }
+.ideas-type-head { margin: 16px 0 8px; font-size: 1.05rem; display: flex; align-items: center; gap: 6px; }
+:root[data-theme="light"] { color-scheme: light; }
+.mroute { font-weight: 400; color: var(--muted); }
+.map-controls .map-filters { flex-direction: column; align-items: stretch; gap: 4px; padding: 10px; max-height: 50vh; overflow-y: auto; }
+.map-filters[hidden] { display: none; }
+.idea-why { color: var(--text); opacity: .85; }

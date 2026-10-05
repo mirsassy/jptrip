@@ -1,11 +1,11 @@
-// "By plan": one day, condensed for the whole group: Travel, Lodging, Booked
-// activities, Notes and Ideas. Rows that describe the same thing for different people
+// "By plan": one day, condensed for the whole group: Weather, Lodging, Travel,
+// Booked activities, Notes and Ideas. Rows that describe the same thing for different people
 // (the same train, the same hotel booked per family) become one line listing everyone.
 import { h, icon } from './dom.js';
 import { state } from '../lib/store.js';
 import { byTime } from '../lib/model.js';
 import { fmtShort } from '../lib/dates.js';
-import { whoChips, statusBadge, googleMapsLink, itemTimeLabel } from './common.js';
+import { whoChips, statusBadge, googleMapsLink, itemTimeLabel, weatherChip } from './common.js';
 import { openItemView } from './item.js';
 import { dayIdeas } from './ideas.js';
 
@@ -43,17 +43,21 @@ export function renderPlan(root, date, { pass, only }) {
     h('h3', { style: { marginTop: 0 } }, icon(ic, 18), ' ', title),
     rows.length ? h('ul', { class: 'plan-list' }, rows) : h('p', { class: 'small muted', style: { margin: 0 } }, empty));
 
-  root.append(
-    section('Travel', 'transport', travel.map((e) => row(e, itemTimeLabel(e.it), e.it.title, e.it.carrier)), 'No travel today.'),
+  const cities = [];
+  [...tonight, ...travel, ...booked].forEach((e) => e.it.cities.forEach((c) => { if (!cities.some((x) => lc(x) === lc(c))) cities.push(c); }));
+  const stayIn = (c) => tonight.find((e) => lc(e.it.city) === lc(c))?.it;
+  const weather = cities.map((c) => weatherChip(c, date, stayIn(c))).filter(Boolean);
+
+  [
+    weather.length ? h('section', { class: 'card plan-day', 'aria-label': 'Weather' }, h('h3', { style: { marginTop: 0 } }, 'Weather'), h('div', null, weather)) : null,
     section('Lodging', 'stay', [
       ...tonight.map((e) => row(e, e.it.date === date ? 'Check-in' : 'Staying', hotelName(e.it), lodgingNote(e))),
       ...leaving.map((e) => row(e, 'Check-out', hotelName(e.it), e.it.city)),
     ], 'Nowhere booked for tonight.'),
+    section('Travel', 'transport', travel.map((e) => row(e, itemTimeLabel(e.it), e.it.title, e.it.carrier)), 'No travel today.'),
     section('Booked activities', 'reservation', booked.map((e) => row(e, e.it.start || '', e.it.title, [e.it.kind, e.it.city].filter(Boolean).join(' · '))), 'Nothing booked today.'),
     notes.length ? section('Notes', 'note', notes.map((it) => row({ it, people: it.people }, '', it.title, it.city)), '') : null,
-  );
-  const cities = [];
-  [...tonight, ...travel, ...booked].forEach((e) => e.it.cities.forEach((c) => { if (!cities.some((x) => lc(x) === lc(c))) cities.push(c); }));
+  ].filter(Boolean).forEach((el) => root.append(el)); // (never append null: it would show as the text "null")
   const ideas = dayIdeas(date, cities);
   root.append(ideas || section('Ideas', 'idea', [], 'No open ideas for today’s cities.'));
 }

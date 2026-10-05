@@ -117,6 +117,7 @@ export const ERROR_TEXT = {
   child_no_account: 'Children don’t get their own sign-in; their parents add and change things for them.',
   admin_from_sheet: 'The administrator account is managed from the Sheet’s Trip app menu.',
   not_configured: 'Not connected to the Sheet yet.',
+  bad_trip_dates: 'Pick a first and a last day, with the last day on or after the first.',
   ai_not_set: 'Reading bookings is not turned on yet. The trip organizer turns it on in the Sheet: Trip app → Set the Claude API key.',
   ai_limit: 'You have read the most documents allowed for today. Try again tomorrow, or add the booking by hand.',
   ai_refused: 'Claude declined to read this. Add the booking by hand instead.',

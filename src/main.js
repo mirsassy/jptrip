@@ -1,4 +1,7 @@
 import './styles.css';
+import { applyTheme } from './lib/theme.js';
+
+applyTheme();
 import { h, icon, clear, toast, sheet } from './ui/dom.js';
 import { state, subscribe, init, sync, setConfig } from './lib/store.js';
 import { findConflicts } from './lib/conflicts.js';
@@ -113,7 +116,7 @@ function render() {
   conflicts = findConflicts(state.model);
   renderChrome(view);
   fab.classList.toggle('hidden', view === 'setup' || (view === 'map' && !isDesktop()) || needsSetup());
-  mapFab.classList.toggle('hidden', view === 'setup' || needsSetup());
+  mapFab.classList.toggle('hidden', !(view === 'month' || view === 'map') || needsSetup()); // the trip map opens from the Month view
   mapFab.setAttribute('aria-pressed', String(view === 'map'));
   mapFab.setAttribute('aria-label', view === 'map' ? 'Close the map' : 'Trip map');
   mapFab.replaceChildren(icon(view === 'map' ? 'close' : 'map', 24));

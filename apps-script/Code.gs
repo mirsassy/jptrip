@@ -128,6 +128,8 @@ function doPost(e) {
         return json_(withLock_(function () { return adminResetPin_(req.email, req.pin); }));
       case 'adminUnlock':
         return json_(withLock_(function () { return adminUnlock_(req.email); }));
+      case 'adminSetTripDates':
+        return json_(withLock_(function () { return setTripDates_(req.start, req.end); }));
       case 'adminRemoveUser':
         return json_(withLock_(function () { return adminRemoveUser_(req.email); }));
       default:
@@ -344,6 +346,20 @@ function adminRemoveUser_(email) {
   return { ok: true, users: loadUsers_().map(publicUser_) };
 }
 
+/** The trip's first and last day as set by the administrator ({} when not set: the app uses the Sheet's dates). */
+function tripDates_() {
+  try { return JSON.parse(PropertiesService.getScriptProperties().getProperty('TRIP_DATES') || '{}'); } catch (err) { return {}; }
+}
+
+function setTripDates_(start, end) {
+  var props = PropertiesService.getScriptProperties();
+  if (!start && !end) { props.deleteProperty('TRIP_DATES'); return { ok: true, data: readAll_() }; }
+  var iso = /^\d{4}-\d{2}-\d{2}$/;
+  if (!iso.test(String(start)) || !iso.test(String(end)) || String(end) < String(start)) return { ok: false, error: 'bad_trip_dates' };
+  props.setProperty('TRIP_DATES', JSON.stringify({ start: String(start), end: String(end) }));
+  return { ok: true, data: readAll_() };
+}
+
 /** True when the People tab lists this name as a child. Children have no accounts; their parents act for them. */
 function isChild_(name) {
   var sh = SpreadsheetApp.getActive().getSheetByName('People');
@@ -405,7 +421,7 @@ function withLock_(fn) {
 function readAll_() {
   var ss = SpreadsheetApp.getActive();
   var tz = ss.getSpreadsheetTimeZone();
-  var out = { tabs: {}, lists: readLists_(ss), serverTime: new Date().toISOString(), sheetUrl: ss.getUrl() };
+  var out = { tabs: {}, lists: readLists_(ss), serverTime: new Date().toISOString(), sheetUrl: ss.getUrl(), trip: tripDates_() };
   Object.keys(TABS).forEach(function (name) {
     var sh = ss.getSheetByName(name);
     if (!sh) return;

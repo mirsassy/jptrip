@@ -9,7 +9,7 @@ import { openEditor, openMoveIdea } from './forms.js';
 const KID = { Yes: 'Kid-friendly', Mixed: 'Mixed for kids', No: 'Not aimed at kids', Check: 'Check age rules' };
 
 /** One idea. With `date`, warns when its timing note says it is closed that day. */
-export function ideaCard(it, { date = '', compact = false } = {}) {
+export function ideaCard(it, { date = '' } = {}) {
   const closed = date && closedOn(it.timing, date);
   const required = /required/i.test(it.booking);
   const verify = /verify/i.test(it.verification);
@@ -18,7 +18,7 @@ export function ideaCard(it, { date = '', compact = false } = {}) {
   return h('div', { class: `idea${closed ? ' closed' : ''}`, dataset: { idea: it.id } },
     h('div', { class: 'idea-head' },
       h('div', { style: { minWidth: 0 } },
-        h('div', { class: 'idea-title' }, it.title),
+        h('div', { class: 'idea-title' }, h('span', { class: `type-dot type-${it.ideaType.toLowerCase()}`, title: it.ideaType }, icon(typeIcon(it.ideaType), 13)), ' ', it.title),
         sub ? h('div', { class: 'small muted' }, sub) : null),
       it.michelin ? h('span', { class: 'chip michelin', title: 'Michelin' }, it.michelin) : null),
     h('div', { class: 'chips', style: { marginTop: '6px' } },
@@ -29,7 +29,7 @@ export function ideaCard(it, { date = '', compact = false } = {}) {
       it.raw._pending ? h('span', { class: 'pending-tag' }, 'Not synced yet') : null),
     it.booking ? h('div', { class: `small idea-line${required ? ' strong' : ''}` }, h('b', null, 'Booking: '), it.booking) : null,
     closed ? h('div', { class: 'small idea-line warn-text', role: 'note' }, icon('issues', 13), ' May be closed this day: ', it.timing) : it.timing ? h('div', { class: 'small idea-line' }, h('b', null, 'When: '), it.timing) : null,
-    !compact && it.raw.Notes ? h('div', { class: 'small idea-line muted' }, it.raw.Notes) : null,
+    it.raw.Notes ? h('div', { class: 'small idea-line idea-why' }, h('b', null, 'Why: '), it.raw.Notes) : null,
     h('div', { class: 'row', style: { marginTop: '8px' } },
       it.status !== 'Confirmed' && it.status !== 'Cancelled' ? h('button', { class: 'btn small primary', onclick: () => openMoveIdea(it.raw) }, icon('reservation', 15), 'Book') : null,
       googleMapsLink(it),
@@ -37,29 +37,46 @@ export function ideaCard(it, { date = '', compact = false } = {}) {
       h('button', { class: 'icon-btn', 'aria-label': `Edit ${it.title}`, onclick: () => openEditor('Ideas', it.raw) }, icon('edit', 16))));
 }
 
+const typeOrder = (a, b) => (a === 'Restaurant' ? -1 : b === 'Restaurant' ? 1 : a === 'Activity' ? -1 : b === 'Activity' ? 1 : a.localeCompare(b));
+
+/** Restaurants first, then activities, then anything else; each with its count. */
+export function byIdeaType(list) {
+  const byType = new Map();
+  list.forEach((it) => { if (!byType.has(it.ideaType)) byType.set(it.ideaType, []); byType.get(it.ideaType).push(it); });
+  return [...byType.keys()].sort(typeOrder).map((t) => ({ type: t, items: byType.get(t) }));
+}
+
+export const typeIcon = (t) => (t === 'Restaurant' ? 'idea' : t === 'Activity' ? 'activity' : 'pin');
+
 /**
- * "Ideas for this day": open ideas in each city where people are that day,
- * one collapsible section per city, restaurants then activities.
+ * "Ideas for this day": open ideas in the cities people are in that day, split into
+ * restaurants, then activities (one collapsible card each), by city inside.
  */
+const openTypes = new Set();
 export function dayIdeas(date, cities) {
   const kidOnly = state.filters.kidOnly;
-  const sections = cities.map((city) => {
-    const list = ideasFor(state.model, [city], { kidOnly, date });
-    if (!list.length) return null;
-    const byType = new Map();
-    list.forEach((it) => { if (!byType.has(it.ideaType)) byType.set(it.ideaType, []); byType.get(it.ideaType).push(it); });
-    const order = [...byType.keys()].sort((a, b) => (a === 'Restaurant' ? -1 : b === 'Restaurant' ? 1 : a.localeCompare(b)));
-    const counts = order.map((t) => `${byType.get(t).length} ${plural(t, byType.get(t).length)}`).join(', ');
-    return h('details', { class: 'card ideas-day' },
-      h('summary', null, icon('idea', 18), h('span', null, h('b', null, `Ideas in ${city}`), h('span', { class: 'small muted' }, ` · ${counts}`))),
-      order.map((t) => h('div', null,
-        h('div', { class: 'section-title' }, plural(t, 2)),
-        byType.get(t).map((it) => ideaCard(it, { date, compact: true })))));
-  }).filter(Boolean);
-  if (!sections.length) return null;
+  const list = ideasFor(state.model, cities, { kidOnly, date });
+  if (!list.length) return null;
+  const cityOrder = (c) => cities.findIndex((x) => x.toLowerCase() === c.toLowerCase());
+  const cards = byIdeaType(list).map(({ type, items }) => {
+    const byCity = new Map();
+    items.sort((a, b) => cityOrder(a.city) - cityOrder(b.city)).forEach((it) => { if (!byCity.has(it.city)) byCity.set(it.city, []); byCity.get(it.city).push(it); });
+    const where = [...byCity.keys()].join(', ');
+    // Stays open until the person closes it, even when the day is redrawn (sync, weather)
+    const d = h('details', { class: `card ideas-day type-${type.toLowerCase()}`, open: openTypes.has(type),
+      ontoggle: (e) => { if (e.target.open) openTypes.add(type); else openTypes.delete(type); } },
+      h('summary', null, h('span', { class: `type-dot type-${type.toLowerCase()}` }, icon(typeIcon(type), 16)),
+        h('span', null, h('b', null, cap(plural(type, 2))), h('span', { class: 'small muted' }, ` · ${items.length} in ${where}`))),
+      [...byCity.entries()].map(([city, its]) => h('div', null,
+        byCity.size > 1 ? h('div', { class: 'section-title' }, city) : null,
+        its.map((it) => ideaCard(it, { date })))));
+    return d;
+  });
   return h('section', { 'aria-label': 'Ideas for this day' },
-    h('div', { class: 'section-title' }, 'Ideas for this day', kidOnly ? ' (kid-friendly only)' : ''), sections);
+    h('div', { class: 'section-title' }, 'Ideas for this day', kidOnly ? ' (kid-friendly only)' : ''), cards);
 }
+
+const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 
 function plural(type, n) {
   const t = type.toLowerCase();

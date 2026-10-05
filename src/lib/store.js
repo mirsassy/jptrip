@@ -221,6 +221,12 @@ export async function changePin(currentPin, newPin) {
 }
 
 /** Administrator actions; each returns the updated list of people with access. */
+/** Administrator: the trip's first and last day (empty strings = use the Sheet's dates). */
+export async function setTripDates(start, end) {
+  const res = await callApi(state.config, 'adminSetTripDates', { start, end });
+  adoptData(res.data);
+}
+
 export async function admin(action, payload = {}) {
   const res = await callApi(state.config, action, payload);
   return res.users;
@@ -235,7 +241,7 @@ export async function eraseThisDevice({ keepUrl = false } = {}) {
   epoch++;
   clearTimeout(wxTimer);
   const url = state.config.url;
-  ['trip.config.v1', 'trip.filters.v1', 'trip.dayMode'].forEach((k) => { try { localStorage.removeItem(k); } catch { /* ignore */ } });
+  ['trip.config.v1', 'trip.filters.v1', 'trip.dayMode', 'trip.dayMode2'].forEach((k) => { try { localStorage.removeItem(k); } catch { /* ignore */ } });
   try { await clearIdb(); } catch { /* ignore */ }
   try { if ('caches' in window) await caches.delete('map-tiles'); } catch { /* ignore */ }
   Object.assign(state, { config: keepUrl && url ? { url } : {}, filters: loadFilters(), data: null, lastSynced: 0, queue: [], failedOps: [], weather: {}, date: null, dateAuto: true });

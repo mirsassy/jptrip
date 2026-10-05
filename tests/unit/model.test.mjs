@@ -216,3 +216,15 @@ describe('same hotel, several bookings', () => {
     expect(g.people).toEqual(expect.arrayContaining(['Avery', 'Blake', 'Kit', 'Robin', 'Casey', 'Drew']));
   });
 });
+
+describe('trip dates', () => {
+  it('uses the administrator\'s dates when set, else the Sheet\'s', () => {
+    const g = createGas();
+    const t = g.login();
+    expect(buildModel(g.post({ action: 'read', token: t }).data).range).toMatchObject({ start: '2030-03-04', end: '2030-03-27' });
+    g.post({ action: 'adminSetTripDates', token: t, start: '2030-03-02', end: '2030-03-29' });
+    const m = buildModel(g.post({ action: 'read', token: t }).data);
+    expect(m.range).toMatchObject({ start: '2030-03-02', end: '2030-03-29', set: true });
+    expect(m.sheetRange).toEqual({ start: '2030-03-04', end: '2030-03-27' });
+  });
+});

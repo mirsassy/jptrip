@@ -259,7 +259,9 @@ export function buildModel(data) {
   const model = {
     people, groups, everyone, cities, lists, items, issues, resolveWho, partySummary, cityCoord,
     peopleByName: new Map(people.map((p) => [p.name, p])),
-    range: start ? { start, end } : null,
+    // The administrator's trip dates win over the dates found in the Sheet
+    range: data?.trip?.start && data?.trip?.end ? { start: data.trip.start, end: data.trip.end, set: true } : start ? { start, end } : null,
+    sheetRange: start ? { start, end } : null,
     itemById: new Map(items.map((i) => [i.id, i])),
   };
   return model;

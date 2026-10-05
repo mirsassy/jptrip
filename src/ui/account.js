@@ -1,8 +1,8 @@
 // Sign-in, PIN changes, and the administrator's "People with access" panel.
 import { h, icon, clear, sheet, toast } from './dom.js';
-import { state, signIn, signOut, changePin, admin, sync } from '../lib/store.js';
+import { state, signIn, signOut, changePin, admin, sync, setTripDates } from '../lib/store.js';
 import { ERROR_TEXT, scriptUrlFrom, pinProblem, randomPin, BUILT_IN_URL } from '../lib/api.js';
-import { ago, fmtJstStamp } from '../lib/dates.js';
+import { ago, fmtJstStamp, fmtShort } from '../lib/dates.js';
 import { safeUrl, personChip } from './common.js';
 import { openEditor } from './forms.js';
 
@@ -109,6 +109,27 @@ export function accountCard() {
         toast('Signed out. The trip was erased from this device.');
       } }, 'Sign out and erase this device')),
     h('p', { class: 'small muted' }, 'Signing out removes the trip, unsent changes and saved map areas from this device. Use it before lending or giving away this device.'));
+}
+
+/* ---------------- Administrator: trip dates ---------------- */
+export function tripDatesCard() {
+  const m = state.model;
+  const r = m.range || {};
+  const start = h('input', { type: 'date', value: r.set ? r.start : '', 'aria-label': 'First day' });
+  const end = h('input', { type: 'date', value: r.set ? r.end : '', 'aria-label': 'Last day' });
+  const status = h('div', { class: 'small', 'aria-live': 'polite' });
+  const save = async (a, b) => {
+    try { await setTripDates(a, b); toast(a ? 'Trip dates saved. Everyone sees them at their next sync.' : 'Trip dates now come from the Sheet again.'); } catch (e) { status.textContent = errText(e); }
+  };
+  const fromSheet = m.sheetRange ? `${fmtShort(m.sheetRange.start)} – ${fmtShort(m.sheetRange.end)}` : 'none yet';
+  return h('div', { class: 'card', id: 'trip-dates' },
+    h('h3', { style: { marginTop: 0 } }, 'Trip dates'),
+    h('p', { class: 'small muted' }, `The first and last day of the trip, used by the day strip, the Month view and the checks. Leave empty to use the dates found in the Sheet (now ${fromSheet}).`),
+    h('div', { class: 'two' }, h('label', { class: 'field' }, h('span', null, 'First day'), start), h('label', { class: 'field' }, h('span', null, 'Last day'), end)),
+    h('div', { class: 'row' },
+      h('button', { class: 'btn primary small', onclick: () => { if (!start.value || !end.value) { status.textContent = ERROR_TEXT.bad_trip_dates; return; } save(start.value, end.value); } }, 'Save trip dates'),
+      r.set ? h('button', { class: 'btn small', onclick: () => save('', '') }, 'Use the Sheet’s dates') : null),
+    status);
 }
 
 /* ---------------- Administrator: people with access ---------------- */
@@ -280,6 +301,7 @@ export function settingsCards() {
         h('button', { class: 'btn', onclick: () => sync() }, icon('sync', 18), 'Sync now'),
         me.role === 'admin' && safeUrl(state.data?.sheetUrl) ? h('a', { class: 'btn', href: safeUrl(state.data.sheetUrl), target: '_blank', rel: 'noopener' }, 'Open the Sheet', icon('ext', 14)) : null)),
     accountCard(),
+    me.role === 'admin' ? tripDatesCard() : null,
     me.role === 'admin' ? adminCard() : null,
     familiesCard(),
   ];

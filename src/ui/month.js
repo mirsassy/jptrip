@@ -19,6 +19,12 @@ function dots(m, names) {
   return h('span', { class: 'mdots', title: names.join(', ') }, names.map((n) => h('span', { class: 'dot', style: { background: m.peopleByName.get(n)?.color || '#888' } })));
 }
 
+/** A short name for an airport or station: its code when the name has one ("Haneda (HND)" → HND), else its first word. */
+export function placeCode(name) {
+  const code = String(name).match(/\b[A-Z]{3}\b/);
+  return code ? code[0] : String(name).trim().split(/[\s,]+/)[0];
+}
+
 const isFlight = (it) => /flight|fly|plane|air/i.test(`${it.mode} ${it.carrier}`);
 
 /** A tappable line inside a day cell: opens that plan, not the day. */
@@ -32,7 +38,8 @@ function cellDetails(m, d, pass, only) {
   const inScope = (it) => pass(it) && it.status !== 'Cancelled' && (!only.length || it.people.some((p) => only.includes(p)));
   m.items.filter((it) => it.type === 'transport' && it.date === d && isFlight(it) && inScope(it)).forEach((it) => {
     const names = it.people.length === m.people.length && it.people.length > 1 ? 'All' : it.people.join(', ');
-    out.push(detail(it, 'mflight', '✈ ', names));
+    const route = [it.from, it.to].every(Boolean) ? ` (${placeCode(it.from)}→${placeCode(it.to)})` : '';
+    out.push(detail(it, 'mflight', '✈ ', names, h('span', { class: 'mroute' }, route)));
   });
   dayGroups(m, d, { pass, onlyPeople: only }).forEach((g) => {
     if (g.stay) {

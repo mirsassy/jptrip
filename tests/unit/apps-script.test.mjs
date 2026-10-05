@@ -353,3 +353,16 @@ describe('Apps Script API: reading bookings with Claude', () => {
     expect(g.post({ action: 'attachment', token: g.login(casey), id: 'x' }).error).toBe('unknown_action');
   });
 });
+
+describe('Apps Script API: trip dates', () => {
+  it('lets only the administrator set or clear the trip dates, and returns them with the data', () => {
+    const g = createGas();
+    expect(g.post({ action: 'adminSetTripDates', token: g.login(casey), start: '2030-03-01', end: '2030-03-30' }).error).toBe('not_admin');
+    const token = g.login(admin);
+    expect(g.post({ action: 'adminSetTripDates', token, start: '2030-03-30', end: '2030-03-01' }).error).toBe('bad_trip_dates');
+    const r = g.post({ action: 'adminSetTripDates', token, start: '2030-03-01', end: '2030-03-30' });
+    expect(r.data.trip).toEqual({ start: '2030-03-01', end: '2030-03-30' });
+    expect(g.post({ action: 'read', token: g.login(casey) }).data.trip).toEqual({ start: '2030-03-01', end: '2030-03-30' });
+    expect(g.post({ action: 'adminSetTripDates', token, start: '', end: '' }).data.trip).toEqual({});
+  });
+});

@@ -7,7 +7,8 @@ import { TYPES, TYPE_LABELS, STATUSES, byTime } from '../lib/model.js';
 import { fmtDay } from '../lib/dates.js';
 import { whoChips, statusBadge, mapLinks, itemTimeLabel, TYPE_ICON, safeUrl } from './common.js';
 import { openEditor, openMoveIdea } from './forms.js';
-import { ideaCard } from './ideas.js';
+import { ideaCard, byIdeaType, typeIcon } from './ideas.js';
+import { getTheme, setTheme } from '../lib/theme.js';
 
 /* ---------------- List: everything that passes the filters, by date ---------------- */
 export function renderList(root) {
@@ -52,6 +53,17 @@ function filterSummary() {
     h('button', { class: 'link', onclick: () => setFilters({ ...DEFAULT_FILTERS }) }, 'Clear filters')));
 }
 
+/** Appearance: automatic (follow the phone), light or dark. */
+function themeCard() {
+  const cur = getTheme();
+  const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Appearance' },
+    [['auto', 'Automatic'], ['light', 'Light'], ['dark', 'Dark']].map(([k, label]) => h('button', { 'aria-pressed': String(cur === k), onclick: () => {
+      setTheme(k);
+      seg.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-pressed', String(['auto', 'light', 'dark'][i] === k)));
+    } }, label)));
+  return h('div', { class: 'card' }, h('h3', { style: { marginTop: 0 } }, 'Appearance'), seg);
+}
+
 /* ---------------- Ideas ---------------- */
 let ideaType = '';
 export function renderIdeas(root) {
@@ -77,15 +89,19 @@ export function renderIdeas(root) {
     root.append(h('div', { class: 'empty' }, m.items.some((i) => i.type === 'idea') ? 'No ideas match the filters.' : 'No ideas yet. Tap “Add idea” to suggest one.'));
     return;
   }
-  let city = null;
-  let box = null;
-  ideas.forEach((it) => {
-    if (it.city !== city) {
-      city = it.city;
-      box = h('section', { class: 'card' }, h('h3', { style: { marginTop: 0 } }, city || 'No city'));
-      root.append(box);
-    }
-    box.append(ideaCard(it));
+  // Restaurants, then activities; by city inside each
+  byIdeaType(ideas).forEach(({ type, items }) => {
+    root.append(h('h3', { class: 'ideas-type-head' }, h('span', { class: `type-dot type-${type.toLowerCase()}` }, icon(typeIcon(type), 16)), ` ${type === 'Activity' ? 'Activities' : `${type}s`} (${items.length})`));
+    let city = null;
+    let box = null;
+    items.forEach((it) => {
+      if (it.city !== city) {
+        city = it.city;
+        box = h('section', { class: 'card' }, h('h3', { style: { marginTop: 0 } }, city || 'No city'));
+        root.append(box);
+      }
+      box.append(ideaCard(it));
+    });
   });
 }
 
@@ -111,6 +127,7 @@ export function renderIssues(root, conflicts) {
     root.append(h('div', { class: 'card', style: { padding: '4px 14px' } }, list.map((c) => h('div', { class: `issue ${c.severity}` },
       icon('issues', 18),
       h('div', null, h('div', { style: { fontWeight: 600 } }, c.title), h('div', { class: 'small' }, c.message),
+        c.people?.length ? h('div', { style: { marginTop: '6px' } }, whoChips(c.people)) : null,
         h('div', { class: 'row', style: { marginTop: '6px' } },
           c.date ? h('button', { class: 'btn small', onclick: () => { setDate(c.date); location.hash = '#day'; } }, `Go to ${fmtDay(c.date)}`) : null,
           c.itemIds.map((id) => state.model.itemById.get(id)).filter(Boolean).slice(0, 2).map((it) => h('button', { class: 'btn small', onclick: () => openEditor(it.tab, it.raw) }, icon('edit', 14), it.title.slice(0, 24)))))))));
@@ -159,6 +176,7 @@ export function renderSettings(root, { firstRun = false, inDialog = false } = {}
   clear(root);
   root.append(
     ...(inDialog ? [] : [h('h2', { style: { margin: '4px 0 8px', fontSize: '1.15rem' } }, 'Settings')]),
+    themeCard(),
     ...settingsCards().filter(Boolean),
     h('div', { class: 'card' },
       h('h3', { style: { marginTop: 0 } }, 'Offline maps'),

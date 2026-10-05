@@ -56,6 +56,7 @@ const ICONS = {
   ext: 'M14 4h6v6M20 4l-9 9M18 14v6H4V6h6',
   import: 'M12 3v11M7.5 9.5 12 14l4.5-4.5M4 15v5h16v-5',
   clip: 'M20 11.5 12 19.5a5 5 0 0 1-7-7L13.5 4a3.4 3.4 0 0 1 4.9 4.8L10 17.2a1.8 1.8 0 0 1-2.6-2.6L15 7',
+  activity: 'M4 20l5-11 4 6 2-3 5 8zM15 4a2 2 0 1 1 0 4 2 2 0 0 1 0-4z',
   kid: 'M12 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6zM7 10h10l-2 6v6h-2v-5h-2v5H9v-6z',
 };
 const STROKE = new Set(['import', 'clip', 'note', 'checkout', 'checkin', 'chevl', 'chevr', 'close', 'edit', 'ext']);

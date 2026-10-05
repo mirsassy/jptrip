@@ -97,20 +97,55 @@ function drawControls() {
       h('button', { class: 'icon-btn', 'aria-label': 'Next day', disabled: allDates, onclick: () => setDate(addDays(state.date, 1)) }, icon('chevr', 18)),
       slider),
   );
-  // The full-screen map shows the whole trip: no day controls there
+  // The full-screen map has its own filters instead of the day controls
   controls.classList.toggle('whole-trip', allDates);
-  if (allDates) clear(controls).append(h('div', { class: 'ctl', style: { padding: '6px 12px', fontWeight: 600 } }, 'Whole trip'));
+  if (allDates) drawTripFilters(days);
 }
 
 /** Items to show: for one date, where everyone sleeps that night plus that day's plans. */
+/* Filters of the full-screen (whole-trip) map: one day or all, people, kinds of plan, country. */
+const tripFilter = { day: '', people: [], kinds: ['stay', 'transport', 'reservation'], country: 'all' };
+let filtersOpen = false;
+const KINDS = [['stay', 'Hotels'], ['transport', 'Travel'], ['reservation', 'Bookings']];
+const inJapan = (loc) => !!loc && loc.lat > 24 && loc.lat < 46.2 && loc.lng > 122.5 && loc.lng < 154;
+const countryOk = (loc) => tripFilter.country === 'all' || !loc || (tripFilter.country === 'japan' ? inJapan(loc) : !inJapan(loc));
+
+function drawTripFilters(days) {
+  const m = state.model;
+  const n = (tripFilter.day ? 1 : 0) + (tripFilter.people.length ? 1 : 0) + (tripFilter.kinds.length < 3 ? 1 : 0) + (tripFilter.country !== 'all' ? 1 : 0);
+  const redraw = () => { controlsSig = ''; lastFitKey = ''; drawControls(); drawMarkers(true); };
+  const daySel = h('select', { 'aria-label': 'Dates', onchange: (e) => { tripFilter.day = e.target.value; redraw(); } },
+    h('option', { value: '' }, 'Whole trip'), days.map((d) => h('option', { value: d }, fmtDay(d))));
+  daySel.value = tripFilter.day;
+  const toggle = (list, v) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+  const abroad = m.items.some((it) => [it.loc, it.fromLoc, it.toLoc].some((l) => l && !l.approx && !inJapan(l)));
+  const panel = h('div', { class: 'ctl map-filters', hidden: !filtersOpen },
+    h('div', { class: 'small muted' }, 'People'),
+    h('div', { class: 'toggle-chips' }, m.people.map((p) => h('button', { 'aria-pressed': String(tripFilter.people.includes(p.name)), onclick: () => { tripFilter.people = toggle(tripFilter.people, p.name); redraw(); } },
+      h('span', { class: 'sw', style: { background: p.color } }), p.name))),
+    h('div', { class: 'small muted' }, 'Show'),
+    h('div', { class: 'toggle-chips' }, KINDS.map(([k, label]) => h('button', { 'aria-pressed': String(tripFilter.kinds.includes(k)), onclick: () => { tripFilter.kinds = toggle(tripFilter.kinds, k); redraw(); } }, label))),
+    abroad ? h('div', { class: 'small muted' }, 'Country') : null,
+    abroad ? h('div', { class: 'toggle-chips' }, [['all', 'All'], ['japan', 'Japan'], ['abroad', 'Outside Japan']].map(([k, label]) => h('button', { 'aria-pressed': String(tripFilter.country === k), onclick: () => { tripFilter.country = k; redraw(); } }, label))) : null,
+    n ? h('button', { class: 'link small', onclick: () => { Object.assign(tripFilter, { day: '', people: [], kinds: KINDS.map(([k]) => k), country: 'all' }); redraw(); } }, 'Clear filters') : null);
+  clear(controls).append(
+    h('div', { class: 'ctl', style: { padding: '4px 6px' } }, daySel,
+      h('button', { class: 'btn small', 'aria-expanded': String(filtersOpen), onclick: () => { filtersOpen = !filtersOpen; panel.hidden = !filtersOpen; } }, icon('filter', 14), n ? `Filters (${n})` : 'Filters')),
+    panel);
+}
+
 function visibleItems() {
   const m = state.model;
-  const date = state.date;
+  const date = allDates ? tripFilter.day : state.date;
   const pass = makePass(m, state.filters, { ignoreDates: !allDates });
   return m.items.filter((it) => {
     if (!pass(it)) return false;
     if (it.type === 'idea') return showIdeas;
-    if (allDates) return it.type !== 'note'; // whole trip: where we stay, travel and bookings
+    if (allDates) {
+      if (!tripFilter.kinds.includes(it.type)) return false;
+      if (tripFilter.people.length && !it.people.some((p) => tripFilter.people.includes(p))) return false;
+      if (!date) return true;
+    }
     if (it.type === 'stay') return it.date <= date && date < it.endDate;
     return it.date === date;
   });
@@ -141,8 +176,8 @@ function drawMarkers(fit = false) {
   if (!map || !maplibre) return;
   const items = visibleItems();
   // Nothing changed (e.g. a background sync): keep the pins, so an open popup stays open
-  const sig = `${allDates}|${state.date}|${items.map((it) => `${it.id}:${it.status}:${it.people.join(',')}:${it.loc?.lat},${it.loc?.lng}:${it.fromLoc?.lat}:${it.toLoc?.lat}`).join('|')}`;
-  if (!fit && sig === markersSig && markers.length) return;
+  const sig = `${allDates}|${state.date}|${JSON.stringify(tripFilter)}|${items.map((it) => `${it.id}:${it.status}:${it.people.join(',')}:${it.loc?.lat},${it.loc?.lng}:${it.fromLoc?.lat}:${it.toLoc?.lat}`).join('|')}`;
+  if (sig === markersSig && markers.length) return; // also when asked to reframe: rebuilding would close an open popup
   markersSig = sig;
   markers.forEach((mk) => mk.remove());
   markers = [];
@@ -162,6 +197,10 @@ function drawMarkers(fit = false) {
       points.push({ it, loc: it.loc });
     }
   });
+
+  if (allDates && tripFilter.country !== 'all') {
+    for (let i = points.length - 1; i >= 0; i--) if (!countryOk(points[i].loc)) points.splice(i, 1);
+  }
 
   // Pins that share a spot (e.g. several at a city center) are fanned out on screen so each can be tapped
   const byKey = new Map();
@@ -191,7 +230,13 @@ function drawMarkers(fit = false) {
   });
 
   // Whole trip: also the moves between stays that have no travel row (e.g. by car), dotted
-  if (allDates) routes.push(...impliedLegs(items));
+  if (allDates && !tripFilter.day && tripFilter.kinds.includes('stay')) routes.push(...impliedLegs(items));
+  if (allDates && tripFilter.country !== 'all') {
+    for (let i = routes.length - 1; i >= 0; i--) {
+      const [a, b] = routes[i].geometry.coordinates;
+      if (!countryOk({ lng: a[0], lat: a[1] }) && !countryOk({ lng: b[0], lat: b[1] })) routes.splice(i, 1);
+    }
+  }
   routes.forEach((f) => {
     const [a, b] = f.geometry.coordinates;
     if (Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) < 0.02) return; // too short to draw an arrow

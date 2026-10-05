@@ -8,12 +8,13 @@ import { openEditor } from './forms.js';
 import { dayIdeas } from './ideas.js';
 import { renderPlan } from './plan.js';
 
-let mode = (() => { try { return localStorage.getItem('trip.dayMode') || 'group'; } catch { return 'group'; } })();
+// "By plan" is the default; the key changed when it became the default, so everyone starts there once
+let mode = (() => { try { return localStorage.getItem('trip.dayMode2') || 'plan'; } catch { return 'plan'; } })();
 
 
-const MODES = [['group', 'By group'], ['person', 'By person'], ['plan', 'By plan']];
+const MODES = [['plan', 'By plan'], ['group', 'By group'], ['person', 'By person']];
 const modeSwitch = (root, conflicts) => h('div', { class: 'seg', role: 'group', 'aria-label': 'Show by' },
-  MODES.map(([k, label]) => h('button', { 'aria-pressed': String(mode === k), onclick: () => { mode = k; try { localStorage.setItem('trip.dayMode', k); } catch { /* ignore */ } renderDay(root, conflicts); } }, label)));
+  MODES.map(([k, label]) => h('button', { 'aria-pressed': String(mode === k), onclick: () => { mode = k; try { localStorage.setItem('trip.dayMode2', k); } catch { /* ignore */ } renderDay(root, conflicts); } }, label)));
 
 export function renderDay(root, conflicts) {
   clear(root);

@@ -30,17 +30,18 @@ async function seed() {
     ['Notes', { ID: 'N-1', Date: '2030-03-08', City: 'Hakodate', Who: 'Everyone', Note: 'Morning market by the bay' }],
     ['Ideas', { ID: 'I-1', Name: 'Ramen alley', City: 'Sapporo', Type: 'Restaurant', Category: 'Ramen', Price: '$', 'Kid-friendly': 'Yes', 'Best for': 'Whole family', Reservation: 'Walk-in', Source: 'https://example.com/ramen', Verification: 'Sourced', Status: 'Idea' }],
     ['Ideas', { ID: 'I-2', Name: 'Kaiseki house', City: 'Sendai', Type: 'Restaurant', Category: 'Kaiseki', Michelin: 'One star', 'Kid-friendly': 'No', Reservation: 'Required, well ahead', Status: 'Idea' }],
-    ['Ideas', { ID: 'I-3', Name: 'Morning market', City: 'Hakodate', Type: 'Activity', Category: 'Market', 'Kid-friendly': 'Yes', 'Timing / closed days': 'Usually closed Fridays.', Verification: 'General knowledge – verify', Status: 'Idea' }],
+    ['Ideas', { ID: 'I-3', Name: 'Morning market', City: 'Hakodate', Type: 'Activity', Category: 'Market', 'Kid-friendly': 'Yes', 'Timing / closed days': 'Usually closed Fridays.', Verification: 'General knowledge – verify', Status: 'Idea', Notes: 'Locals start early; good for the kids.' }],
   ];
   for (const [tab, values] of rows) await api({ action: 'upsert', tab, values });
 }
 
 /** Opens the app as an already-connected phone, with the clock at `when` (Japan time). */
-async function open(page, context, { hash = '#day', when = '2030-03-04T09:00:00+09:00', user = admin, stub = true } = {}) {
+async function open(page, context, { hash = '#day', when = '2030-03-04T09:00:00+09:00', user = admin, stub = true, mode = 'group' } = {}) {
   if (stub) await stubNetwork(context);
   const r = await signInApi(user);
   const config = { url: API, token: r.token, me: r.me };
-  await context.addInitScript((c) => { if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); if (!localStorage.getItem('trip.config.v1')) localStorage.setItem('trip.config.v1', JSON.stringify(c)); } }, config);
+  // Most Day-view tests look at "By group"; mode: null keeps the app's own default ("By plan")
+  await context.addInitScript(([c, mode]) => { if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); if (!localStorage.getItem('trip.config.v1')) localStorage.setItem('trip.config.v1', JSON.stringify(c)); if (mode) localStorage.setItem('trip.dayMode2', mode); } }, [config, mode]);
   // Playwright's fake clock also breaks service-worker cache reads, so offline tests use the real clock (when: null)
   if (when) {
     await page.clock.install({ time: new Date(when) });
@@ -79,7 +80,7 @@ test('first sign-in: invite link, email and PIN, then a prompt to choose your ow
   await page.getByRole('button', { name: 'Sign in' }).click();
   // Before the trip, the Day view opens on the first trip day
   await expect(page.locator('.date-label')).toContainText('Mon, Mar 4');
-  await expect(page.locator('.card h3').first()).toContainText('Sapporo');
+  await expect(page.getByRole('region', { name: 'Lodging' })).toContainText('Sapporo'); // a new device opens on By plan
   // First sign-in with a PIN the organizer chose: offered a new one
   const dlg = page.getByRole('dialog', { name: 'Choose your own PIN' });
   await expect(dlg).toBeVisible();
@@ -231,7 +232,8 @@ test('filters: persist after reload and apply to the day view', async ({ page, c
 
 test('ideas: type and kid-friendly filters, booking details, and one-tap Book', async ({ page, context }) => {
   await open(page, context, { hash: '#ideas' });
-  await expect(page.locator('.idea-title')).toHaveText(['Morning market', 'Ramen alley', 'Kaiseki house']);
+  await expect(page.locator('.ideas-type-head')).toHaveText([/Restaurants \(2\)/, /Activities \(1\)/]);
+  await expect(page.locator('.idea-title')).toHaveText(['Ramen alley', 'Kaiseki house', 'Morning market']);
   await expect(page.locator('[data-idea=I-2]')).toContainText('One star');
   await expect(page.locator('[data-idea=I-2]')).toContainText('Booking: Required, well ahead');
   await expect(page.locator('[data-idea=I-3]')).toContainText('Verify details');
@@ -239,7 +241,7 @@ test('ideas: type and kid-friendly filters, booking details, and one-tap Book', 
   await expect(page.locator('.idea-title')).toHaveText(['Morning market']);
   await page.getByRole('button', { name: 'All', exact: true }).click();
   await page.getByRole('button', { name: 'Kid-friendly only' }).click();
-  await expect(page.locator('.idea-title')).toHaveText(['Morning market', 'Ramen alley']);
+  await expect(page.locator('.idea-title')).toHaveText(['Ramen alley', 'Morning market']);
   await expect(page.locator('[data-idea=I-1]').getByRole('link', { name: /Source/ })).toHaveAttribute('href', 'https://example.com/ramen');
   await page.locator('[data-idea=I-1]').getByRole('button', { name: 'Book' }).click();
   const dlg = page.getByRole('dialog', { name: 'Move to Reservations' });
@@ -257,12 +259,17 @@ test('day view ends with ideas for the cities people are in, flagging a closing 
   await open(page, context);
   await page.getByRole('button', { name: /Fri, Mar 8/ }).click();
   const ideas = page.getByRole('region', { name: 'Ideas for this day' });
-  await expect(ideas).toContainText('Ideas in Hakodate');
+  await expect(ideas).toContainText('Activities · 1 in Hakodate');
   await expect(ideas).not.toContainText('Ramen alley'); // Sapporo
-  await ideas.getByText('Ideas in Hakodate').click();
+  await ideas.getByText('Activities').click();
   await expect(ideas.locator('[data-idea=I-3]')).toContainText('May be closed this day');
+  // Stays open through a sync (which redraws the day) until closed by hand
+  await page.locator('.sync-pill').click();
+  await expect(page.locator('.sync-pill')).toContainText('Synced');
+  await expect(page.locator('.ideas-day.type-activity')).toHaveAttribute('open', '');
+  await expect(page.locator('[data-idea=I-3]')).toContainText('Why: Locals start early');
   await page.getByRole('button', { name: /Sat, Mar 9/ }).click();
-  await page.getByRole('region', { name: 'Ideas for this day' }).getByText('Ideas in Hakodate').click();
+  await page.getByRole('region', { name: 'Ideas for this day' }).getByText('Activities').click();
   await expect(page.locator('[data-idea=I-3]')).not.toContainText('May be closed this day');
 });
 
@@ -271,9 +278,12 @@ test('by plan: one day condensed into Travel, Lodging, Booked activities and Ide
   await api({ action: 'upsert', tab: 'Stays', values: { ID: 'S-a', 'Check-in': '2030-03-08', 'Check-out': '2030-03-10', City: 'Hakodate', Hotel: 'Harbor View Hotel', Address: '1-2-3 Ohtemachi, Hakodate', Who: 'Avery family', Status: 'Confirmed' } });
   await api({ action: 'upsert', tab: 'Stays', values: { ID: 'S-b', 'Check-in': '2030-03-08', 'Check-out': '2030-03-10', City: 'Hakodate', Hotel: 'HARBOR VIEW HOTEL by Example', Address: '1 Chome-2-3 Otemachi, Hakodate-shi', Who: 'Casey and Drew', Status: 'Confirmed' } });
   await api({ action: 'upsert', tab: 'Transport', values: { ID: 'T-2', Date: '2030-03-08', Depart: '09:30', Arrive: '12:00', Mode: 'Limited express', From: 'Otaru', To: 'Hakodate', 'Carrier / train': 'Hokuto 5', Who: 'Gale', Status: 'Confirmed' } });
-  await open(page, context);
+  await open(page, context, { mode: null });
+  await expect(page.getByRole('button', { name: 'By plan' })).toHaveAttribute('aria-pressed', 'true'); // the default
+  await expect(page.locator('.seg[aria-label="Show by"] button')).toHaveText(['By plan', 'By group', 'By person']);
   await page.getByRole('button', { name: /Fri, Mar 8/ }).click();
-  await page.getByRole('button', { name: 'By plan' }).click();
+  await expect(page.locator('.pane-main section.card > h3')).toHaveText([/Weather/, /Lodging/, /Travel/, /Booked activities/, /Notes/]);
+  await expect(page.locator('.pane-main')).not.toContainText('null');
   const travel = page.getByRole('region', { name: 'Travel' });
   await expect(travel.locator('li')).toHaveCount(1);
   await expect(travel).toContainText('Hokuto 5');
@@ -283,20 +293,19 @@ test('by plan: one day condensed into Travel, Lodging, Booked activities and Ide
   await expect(lodging).toContainText('Check-out'); // leaving Otaru
   await expect(page.getByRole('region', { name: 'Booked activities' })).toContainText('Seafood dinner');
   await expect(page.getByRole('region', { name: 'Booked activities' })).not.toContainText('Old booking'); // cancelled
-  await expect(page.getByRole('region', { name: 'Ideas for this day' })).toContainText('Ideas in Hakodate');
+  await expect(page.getByRole('region', { name: 'Ideas for this day' })).toContainText('Activities · 1 in Hakodate');
   await lodging.getByRole('button', { name: /Harbor View Hotel/ }).click();
   await expect(page.getByRole('dialog', { name: 'Harbor View Hotel' })).toBeVisible();
 });
 
 test('map: pins link to Google Maps, with the popup above every pin', async ({ page, context }) => {
-  await open(page, context);
-  await page.getByRole('button', { name: /Fri, Mar 8/ }).click();
+  await open(page, context, { hash: '#month' });
   await page.getByRole('button', { name: 'Trip map' }).click();
-  await expect(page.locator('.map-controls')).toHaveText('Whole trip'); // no filters or day controls on the full map
-  await expect(page.locator('.map-controls').getByRole('button')).toHaveCount(0);
+  await expect(page.locator('.map-controls').getByRole('combobox', { name: 'Dates' })).toHaveValue(''); // whole trip
   const pin = page.getByRole('button', { name: 'Seafood dinner', exact: true });
   await expect(pin).toBeVisible();
-  await pin.click();
+  await pin.focus();
+  await page.keyboard.press('Enter'); // pins near each other may overlap at this zoom; the keyboard opens exactly this one
   const popup = page.locator('.maplibregl-popup');
   await expect(popup).toContainText('Seafood dinner');
   await expect(popup.getByRole('link', { name: /Google Maps/ })).toHaveAttribute('href', /^https:\/\/www\.google\.com\/maps\/search\/\?api=1&query=/);
@@ -420,7 +429,7 @@ test('administrator: add a person, who then signs in with the starting PIN', asy
 test('security policy: the app cannot send data to other sites', async ({ page, context }) => {
   const violations = [];
   page.on('console', (m) => { if (/Content Security Policy/i.test(m.text())) violations.push(m.text()); });
-  await open(page, context);
+  await open(page, context, { hash: '#month' });
   await page.getByRole('button', { name: 'Trip map' }).click();
   await expect(page.locator('.pin').first()).toBeVisible();
   expect(violations).toEqual([]); // normal use stays within the policy
@@ -588,16 +597,30 @@ test('a change made directly in the Sheet shows up after sync', async ({ page, c
   await expect(page.getByText('Typed in the Sheet')).toBeVisible();
 });
 
-test('whole-trip map: stays and travel with direction arrows; the button closes it again', async ({ page, context }) => {
+test('whole-trip map: opened from Month only; stays and travel with arrows; filters; the button closes it', async ({ page, context }) => {
   await open(page, context, { hash: '#list' });
+  await expect(page.getByRole('button', { name: 'Trip map' })).toBeHidden(); // only on the Month view
+  await page.goto('/#month');
   await page.getByRole('button', { name: 'Trip map' }).click();
   await expect(page).toHaveURL(/#map$/);
-  await expect(page.locator('.map-controls')).toContainText('Whole trip');
   await expect(page.getByRole('button', { name: /Stay in Okinawa|Okinawa/ }).first()).toBeAttached();
   await expect.poll(() => page.locator('.route-arrow').count()).toBeGreaterThan(3); // Sapporo → Otaru → … → Okinawa
   await expect(page.locator('.route-arrow.travel')).toHaveCount(1); // the Hokuto 5 train row
+  // Filters: one person, then only travel
+  await page.locator('.map-controls').getByRole('button', { name: 'Filters' }).click();
+  await page.locator('.map-filters').getByRole('button', { name: 'Avery', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Seafood dinner', exact: true })).toBeAttached(); // Avery & Blake
+  await page.locator('.map-filters').getByRole('button', { name: 'Hotels' }).click();
+  await page.locator('.map-filters').getByRole('button', { name: 'Bookings' }).click();
+  await expect(page.getByRole('button', { name: 'Seafood dinner', exact: true })).toHaveCount(0);
+  await expect(page.locator('.route-arrow.implied')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Filters \(2\)/ })).toBeVisible();
+  // One day
+  await page.locator('.map-controls').getByRole('combobox', { name: 'Dates' }).selectOption('2030-03-08');
+  await expect(page.locator('.route-arrow.travel')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Clear filters' }).click();
   await page.getByRole('button', { name: 'Close the map' }).click();
-  await expect(page).toHaveURL(/#list$/);
+  await expect(page).toHaveURL(/#month$/);
 });
 
 test('month view: hotels, reservations and flights in each day; a detail opens the plan, the day opens the day', async ({ page, context }, info) => {
@@ -608,7 +631,7 @@ test('month view: hotels, reservations and flights in each day; a detail opens t
   const cell = page.getByRole('button', { name: 'Mar 8', exact: true });
   await expect(cell).toContainText('Harbor View Hotel');
   await expect(cell).toContainText('Seafood dinner');
-  await expect(cell).toContainText('✈ Casey, Drew');
+  await expect(cell).toContainText('✈ Casey, Drew (Sapporo→Hakodate)');
   await cell.getByRole('button', { name: /Seafood dinner/ }).click();
   const view = page.getByRole('dialog', { name: 'Seafood dinner' });
   await expect(view).toContainText('Hakodate');
@@ -621,6 +644,41 @@ test('month view: hotels, reservations and flights in each day; a detail opens t
   await cell.locator('.mnum').click();
   await expect(page).toHaveURL(/#day$/);
   await expect(page.getByText('Fri, Mar 8', { exact: true }).first()).toBeVisible();
+});
+
+test('settings: light and dark appearance, remembered on the device', async ({ page, context }) => {
+  await open(page, context);
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const dlg = page.getByRole('dialog', { name: 'Settings' });
+  await expect(dlg.locator('.card').first()).toContainText('Appearance');
+  await dlg.getByRole('button', { name: 'Dark' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Light' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+});
+
+test('issues show the people involved as chips', async ({ page, context }) => {
+  await api({ action: 'upsert', tab: 'Reservations', values: { ID: 'R-kids', Date: '2030-03-06', Time: '15:00', Name: 'Kids club', City: 'Otaru', Who: 'Kit, Robin' } });
+  await open(page, context, { hash: '#issues' });
+  const issue = page.locator('.issue', { hasText: 'Kids club' });
+  await expect(issue.locator('.chip')).toHaveText([/Kit/, /Robin/]);
+});
+
+test('administrator sets the trip dates; the day strip follows', async ({ page, context }) => {
+  await open(page, context, { hash: '#settings' });
+  const card = page.getByRole('dialog', { name: 'Settings' }).locator('#trip-dates');
+  await expect(card).toContainText('now Mar 4 – Mar 27');
+  await card.getByLabel('First day').fill('2030-03-02');
+  await card.getByLabel('Last day').fill('2030-03-29');
+  await card.getByRole('button', { name: 'Save trip dates' }).click();
+  await expect(page.getByRole('status')).toContainText('Trip dates saved');
+  await expect(card.getByRole('button', { name: 'Use the Sheet’s dates' })).toBeVisible();
+  expect((await api({ action: 'read' })).data.trip).toEqual({ start: '2030-03-02', end: '2030-03-29' });
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.daystrip button').first()).toContainText('2');
 });
 
 test('desktop: map and day view side by side', async ({ page, context }, info) => {
