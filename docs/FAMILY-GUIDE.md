@@ -37,7 +37,7 @@ Pick a date with the arrows or the strip of days. Three ways to see it (buttons 
   - **Travel**: trains, flights and transfers
   - **Booked activities**: reservations
   - **Ideas for this day**: restaurants (red badge), then activities (green badge), for the cities you're in
-- **By group**: one card per group sleeping in the same place, with the day's times in order.
+- **By group**: one card per group from the People tab (usually a family), then anyone not in a group, with the day's times in order.
 - **By person**: one card per person.
 
 Tap a plan to see its details (confirmation number, address, who), with **Google Maps** and **Edit**.

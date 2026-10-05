@@ -62,8 +62,14 @@ export function renderDay(root, conflicts) {
   if (mode === 'plan') { renderPlan(root, date, { pass, only }); return; } // the day, condensed for the whole group
 
   if (mode === 'group') {
-    const groups = dayGroups(m, date, { pass, onlyPeople: only });
-    groups.forEach((g) => root.append(groupCard(g, date, flaggedIds)));
+    // One card per group from the People tab (usually a family), then anyone in no group.
+    // If a group's members sleep in different places tonight, it gets one card per place.
+    const inScope = (n) => !only.length || only.includes(n);
+    const sets = [
+      ...m.groups.map((g) => ({ name: g.name, members: g.members.filter(inScope) })),
+      { name: 'Not in a group', members: m.people.filter((p) => !p.groups.length).map((p) => p.name).filter(inScope) },
+    ].filter((x) => x.members.length);
+    sets.forEach((x) => dayGroups(m, date, { pass, onlyPeople: x.members }).forEach((g) => root.append(groupCard(g, date, flaggedIds, null, x.name))));
   } else {
     const names = m.people.map((p) => p.name).filter((n) => !only.length || only.includes(n));
     names.forEach((n) => {
@@ -79,11 +85,11 @@ export function renderDay(root, conflicts) {
   if (ideas) root.append(ideas);
 }
 
-function groupCard(g, date, flaggedIds, person) {
+function groupCard(g, date, flaggedIds, person, groupName) {
   const stay = g.stay;
   const head = h('div', { class: 'group-head' },
     h('div', null,
-      h('h3', null, person ? personChip(person) : null, person ? ' ' : null, g.label),
+      h('h3', null, person ? personChip(person) : null, person ? ' ' : null, groupName ? [groupName, h('span', { class: 'muted', style: { fontWeight: 400 } }, ` · ${g.label}`)] : g.label),
       h('div', { class: 'where' }, stay
         ? [`Sleeping at ${stay.title}`, stay.status !== 'Confirmed' ? [' · ', statusBadge(stay.status)] : null]
         : g.transit ? `On ${g.transit.title} overnight` : 'Nowhere to sleep booked for tonight')),
@@ -93,7 +99,7 @@ function groupCard(g, date, flaggedIds, person) {
 
   const list = h('ul', { class: 'timeline' }, g.timeline.map((e) => timelineRow(e, g, flaggedIds)));
   if (!g.timeline.length) list.append(h('li', null, h('span'), h('span'), h('span', { class: 'muted' }, 'Nothing planned.'), h('span')));
-  return h('section', { class: 'card', 'aria-label': `${g.label}: ${g.people.join(', ')}` }, head, wx, list);
+  return h('section', { class: 'card', 'aria-label': `${groupName ? `${groupName}, ${g.label}` : g.label}: ${g.people.join(', ')}` }, head, wx, list);
 }
 
 function timelineRow(e, g, flaggedIds) {

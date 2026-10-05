@@ -159,7 +159,7 @@ test('issues: missing night, double booking and deadline in 72 h', async ({ page
   await expect(page.getByText(/“Seafood dinner” \(Mar 8\): free cancellation ends Wed, Mar 6 18:00 JST, in 5[67] h/)).toBeVisible();
   await page.getByRole('button', { name: 'Go to Mon, Mar 11' }).click();
   await expect(page.locator('.date-label')).toContainText('Mon, Mar 11');
-  await expect(page.getByText('Nowhere to sleep booked for tonight')).toBeVisible();
+  await expect(page.getByText('Nowhere to sleep booked for tonight').first()).toBeVisible();
 });
 
 test('add a reservation: dropdowns from Lists; "Last edited by" is the signed-in person', async ({ page, context }) => {
@@ -205,7 +205,7 @@ test('required fields are checked before saving', async ({ page, context }) => {
 test('edit a stay: paste a Google Maps link to fix the pin; only changed fields are sent', async ({ page, context }) => {
   await open(page, context);
   await page.getByRole('button', { name: /Fri, Mar 8/ }).click();
-  await page.getByRole('button', { name: 'Edit Stay in Hakodate' }).click();
+  await page.getByRole('button', { name: 'Edit Stay in Hakodate' }).first().click();
   const dlg = page.getByRole('dialog', { name: 'Edit stay' });
   await dlg.locator('input[name=Hotel]').fill('Harbor Inn');
   await dlg.getByPlaceholder(/Paste a Google Maps link/).fill('https://www.google.com/maps/place/Harbor/@41.7687,140.7288,17z');
@@ -335,7 +335,7 @@ test('offline: app and data load without a connection, edits queue and sync late
   await dlg.locator('textarea[name=Note]').fill('Buy Robin a rain poncho');
   await dlg.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(page.locator('.sync-pill')).toContainText('1 waiting');
-  await expect(page.getByText('Not synced yet')).toBeVisible();
+  await expect(page.getByText('Not synced yet').first()).toBeVisible();
   expect((await sheetRows('Notes')).length).toBe(1);
 
   await context.setOffline(false);
@@ -590,6 +590,13 @@ test('day view items show type, place, people and a Google Maps link, not notes'
   await expect(row.getByRole('link', { name: /Apple Maps/ })).toHaveCount(0);
 });
 
+test('by group: one card per group from the People tab, then people in no group', async ({ page, context }) => {
+  await open(page, context);
+  await expect(page.locator('.pane-main section.card h3')).toHaveText([/^Avery family · Sapporo/, /^Casey and Drew · Sapporo/, /^Not in a group · Sapporo/]);
+  await expect(page.getByRole('region', { name: /^Avery family, Sapporo: Avery, Blake, Kit, Robin$/ })).toBeVisible();
+  await expect(page.getByRole('region', { name: /^Not in a group, Sapporo: Emery, Frankie, Gale$/ })).toBeVisible();
+});
+
 test('someone else\'s change waits behind "Show changes" instead of redrawing under the person', async ({ page, context }) => {
   await open(page, context);
   await page.getByRole('button', { name: /Fri, Mar 8/ }).click();
@@ -620,7 +627,7 @@ test('a change made directly in the Sheet shows up after sync', async ({ page, c
   await open(page, context);
   await api({ action: 'upsert', tab: 'Notes', values: { ID: 'N-sheet', Date: '2030-03-04', City: 'Sapporo', Who: 'Everyone', Note: 'Typed in the Sheet' } });
   await page.locator('.sync-pill').click();
-  await expect(page.getByText('Typed in the Sheet')).toBeVisible();
+  await expect(page.getByText('Typed in the Sheet').first()).toBeVisible();
 });
 
 test('whole-trip map: opened from Month only; stays and travel with arrows; filters; the button closes it', async ({ page, context }) => {
