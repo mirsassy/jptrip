@@ -4,8 +4,9 @@ Open decisions and things that could not be verified while building the app. Iti
 
 ## For the trip organizer to do
 
-- [ ] **Update the Sheet's script again** (needed for Settings → Trip dates, and for faster syncs): paste the new `apps-script/Code.gs`, Save, then Deploy → Manage deployments → pencil → New version → Deploy.
-- [ ] **Update the Sheet's script** (needed for the Ideas tab): paste the new `apps-script/Code.gs` and `apps-script/appsscript.json` into Extensions → Apps Script, Save, then Deploy → Manage deployments → pencil → New version → Deploy. Then Trip app → Fill IDs and map locations now (repeat until all ideas have pins; it does about 100 per run).
+- [ ] **Optional script update** (Oct 5): the script now puts the Ideas ID column back by itself if a tool rewrites the tab without it. Until then, keep an **ID** column at the end of Ideas. Paste the new `apps-script/Code.gs`, Save, then Deploy → Manage deployments → pencil → New version → Deploy.
+- [x] **Update the Sheet's script again** (needed for Settings → Trip dates, and for faster syncs): paste the new `apps-script/Code.gs`, Save, then Deploy → Manage deployments → pencil → New version → Deploy.
+- [x] **Update the Sheet's script** (needed for the Ideas tab; all ideas have pins): paste the new `apps-script/Code.gs` and `apps-script/appsscript.json` into Extensions → Apps Script, Save, then Deploy → Manage deployments → pencil → New version → Deploy. Then Trip app → Fill IDs and map locations now (repeat until all ideas have pins; it does about 100 per run).
 - [x] Turn on GitHub Pages (done; the app is published).
 - [x] Build the web app address into the app (GitHub variable TRIP_SCRIPT_URL; done).
 - [ ] Everything in Part 2 of [SETUP.md](SETUP.md): add and deploy the Apps Script, make yourself administrator, add the family.
@@ -36,7 +37,7 @@ Open decisions and things that could not be verified while building the app. Iti
 - [ ] **Administrator recovery** is from the Sheet menu only (Set up the administrator again).
 - [ ] **Who is required** for stays, transport and reservations in the app's forms (not for notes or ideas). Rows typed in the Sheet can still leave Who blank, which means everyone; editing such a row in the app asks for Who.
 - [ ] **Import is reviewed, never automatic.** Each booking Claude finds opens in its form; nothing is added until someone taps Add. Guest names are matched to People by name; unmatched names are listed.
-- [ ] **Ideas tab** comes from a separate research agent. The app reads its columns as named (Name … Notes) and adds ID, Lat, Lng, Last edited by at the end; keep those four at the end if the agent rewrites the tab. "Book" sets the idea's Status to Confirmed.
+- [ ] **Ideas tab** comes from a separate research agent. The app reads its columns as named (Name … Notes) and adds ID, Lat, Lng, Last edited by at the end; keep those four at the end if the agent rewrites the tab (the script re-adds ID if it goes missing). A Must-try column marked Yes shows a ★ Must-try badge, listed first. "Book" sets the idea's Status to Confirmed.
 - [ ] **Times in other time zones** (e.g. a flight departing the US) are converted to Japan time by Claude, with the original noted; worth checking on import.
 - [ ] **Claude model and effort**: `claude-opus-5-5` at effort "low" to keep each read fast and cheap. A cheaper model could be used if cost matters.
 

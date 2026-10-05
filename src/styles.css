@@ -295,6 +295,7 @@ body[data-view="setup"] .sync-pill, body[data-view="setup"] header .icon-btn, bo
 .idea.closed { opacity: .75; }
 .warn-text { color: var(--warn); font-weight: 600; }
 .chip.michelin { background: #b7282e; color: #fff; white-space: nowrap; }
+.chip.must { background: #b8860b; color: #fff; white-space: nowrap; }
 .chip.warn { background: color-mix(in srgb, var(--warn) 18%, var(--surface)); }
 .chip.muted { color: var(--muted); }
 .ideas-day summary { cursor: pointer; display: flex; gap: 8px; align-items: center; list-style: none; }

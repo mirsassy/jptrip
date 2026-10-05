@@ -213,6 +213,7 @@ export function buildModel(data) {
     it.ideaType = norm(r.Type) || 'Other';
     it.category = norm(r.Category);
     it.michelin = norm(r.Michelin);
+    it.mustTry = yesNo(r['Must-try']) === 'Yes';
     it.price = norm(r.Price);
     it.kidRaw = norm(r['Kid-friendly']);
     it.kid = yesNo(r['Kid-friendly']);

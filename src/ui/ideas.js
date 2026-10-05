@@ -22,6 +22,7 @@ export function ideaCard(it, { date = '' } = {}) {
         sub ? h('div', { class: 'small muted' }, sub) : null),
       it.michelin ? h('span', { class: 'chip michelin', title: 'Michelin' }, it.michelin) : null),
     h('div', { class: 'chips', style: { marginTop: '6px' } },
+      it.mustTry ? h('span', { class: 'chip must' }, '★ Must-try') : null,
       kid ? h('span', { class: `chip${it.kidRaw === 'Yes' ? '' : ' muted'}` }, it.kidRaw === 'Yes' ? icon('kid', 13) : null, kid) : null,
       it.bestFor ? h('span', { class: 'chip' }, it.bestFor) : null,
       verify ? h('span', { class: 'chip warn', title: it.verification }, 'Verify details') : null,
@@ -60,7 +61,7 @@ export function dayIdeas(date, cities) {
   const cityOrder = (c) => cities.findIndex((x) => x.toLowerCase() === c.toLowerCase());
   const cards = byIdeaType(list).map(({ type, items }) => {
     const byCity = new Map();
-    items.sort((a, b) => cityOrder(a.city) - cityOrder(b.city)).forEach((it) => { if (!byCity.has(it.city)) byCity.set(it.city, []); byCity.get(it.city).push(it); });
+    items.sort((a, b) => cityOrder(a.city) - cityOrder(b.city) || b.mustTry - a.mustTry).forEach((it) => { if (!byCity.has(it.city)) byCity.set(it.city, []); byCity.get(it.city).push(it); });
     const where = [...byCity.keys()].join(', ');
     // Stays open until the person closes it, even when the day is redrawn (sync, weather)
     const d = h('details', { class: `card ideas-day type-${type.toLowerCase()}`, open: openTypes.has(type),

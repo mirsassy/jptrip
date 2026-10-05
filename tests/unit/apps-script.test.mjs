@@ -379,4 +379,19 @@ describe('Apps Script API: fast reads', () => {
     // The ID is stored, so the next read sees the same one
     expect(g.post({ action: 'read', token }).data.tabs.Ideas.rows.find((r) => r.Name === 'Typed by another tool').ID).toBe(row.ID);
   });
+
+  it('puts the ID column back when another tool rewrote the tab without it', () => {
+    const g = createGas();
+    const token = g.login(admin);
+    const sh = g.ss.getSheetByName('Ideas');
+    sh.cells = [['Name', 'City', 'Type', 'Must-try', 'Lat', 'Lng'], ['Soba spot', 'Otaru', 'Restaurant', 'Yes', '43.19', '141.0']];
+    const read = g.post({ action: 'read', token }).data.tabs.Ideas;
+    expect(read.headers).toEqual(['Name', 'City', 'Type', 'Must-try', 'Lat', 'Lng', 'ID']);
+    const id = read.rows[0].ID;
+    expect(id).toMatch(/^I-/);
+    // Editing it from the app works again
+    expect(g.post({ action: 'upsert', token, tab: 'Ideas', key: id, values: { Status: 'Shortlist' } }).ok).toBe(true);
+    expect(sh.cells[1][0]).toBe('Soba spot');
+    expect(sh.cells.length).toBe(2);
+  });
 });

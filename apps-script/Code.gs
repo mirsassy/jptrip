@@ -435,8 +435,8 @@ function readAll_(opts) {
 /** Gives rows typed or pasted into the Sheet (e.g. by another tool) an ID, so the app can edit them in place. */
 function fillIds_(tab, sh, t) {
   var cfg = TABS[tab];
-  var col = t.headers.indexOf('ID');
-  if (!cfg.prefix || col < 0) return;
+  if (!cfg.prefix) return;
+  var col = ensureKeyCol_(sh, t.headers, cfg.key);
   var missing = t.rows.filter(function (r) { return !r.ID; });
   if (!missing.length) return;
   var lock = LockService.getScriptLock();
@@ -539,8 +539,7 @@ function upsert_(tab, key, values, editor) {
   var sh = ss.getSheetByName(tab);
   var tz = ss.getSpreadsheetTimeZone();
   var headers = headerRow_(sh);
-  var keyCol = headers.indexOf(cfg.key);
-  if (keyCol < 0) throw new Error('Missing key column ' + cfg.key + ' in ' + tab);
+  var keyCol = ensureKeyCol_(sh, headers, cfg.key);
 
   if (cfg.prefix && !values[cfg.key] && !key) values[cfg.key] = newId_(cfg.prefix);
   var lookup = key || values[cfg.key];
@@ -590,6 +589,16 @@ function writeCell_(range, header, v) {
     range.setNumberFormat('@');
   }
   range.setValue(s);
+}
+
+/** If a tool rewrote a tab without its ID column, adds it back at the end (headers is updated too). */
+function ensureKeyCol_(sh, headers, key) {
+  var col = headers.indexOf(key);
+  if (col >= 0) return col;
+  col = headers.length;
+  sh.getRange(1, col + 1).setValue(key);
+  headers.push(key);
+  return col;
 }
 
 function headerRow_(sh) {
