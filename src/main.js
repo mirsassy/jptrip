@@ -103,8 +103,9 @@ function renderChrome(view) {
   const q = state.queue.length;
   let cls = '', text;
   if (state.syncing) { cls = 'syncing'; text = q ? `Sending ${q} change(s)…` : 'Syncing…'; }
-  else if (!state.online || state.error?.code === 'offline') { cls = 'offline'; text = `Offline · synced ${ago(state.lastSynced)}${q ? ` · ${q} waiting` : ''}`; }
+  else if (!state.online || state.error?.code === 'offline') { cls = 'offline'; text = `Offline · ${state.lastSynced ? `synced ${ago(state.lastSynced)}` : 'not synced yet'}${q ? ` · ${q} waiting` : ''}`; }
   else if (state.error) { cls = 'error'; text = 'Sync problem'; }
+  else if (!state.lastSynced) text = q ? `Not synced yet · ${q} waiting` : 'Not synced yet';
   else text = `Synced ${ago(state.lastSynced)}${q ? ` · ${q} waiting` : ''}`;
   syncPill.className = `sync-pill ${cls}`;
   clear(syncPill).append(h('span', { class: 'dot' }), text);

@@ -49,7 +49,7 @@ async function open(page, context, { hash = '#day', when = '2030-03-04T09:00:00+
     await page.clock.resume();
   }
   await page.goto(`/${hash}`);
-  await expect(page.locator('.sync-pill')).toContainText('Synced', { timeout: 15000 });
+  await expect(page.locator('.sync-pill')).toContainText(/Synced (just now|\d)/, { timeout: 15000 }); // a real sync, not "not synced yet"
 }
 
 async function deviceStorage(page) {
@@ -218,12 +218,8 @@ test('edit a stay: paste a Google Maps link to fix the pin; only changed fields 
 
 test('filters: persist after reload and apply to the day view', async ({ page, context }) => {
   await open(page, context);
+  await page.getByRole('button', { name: /^Filters/ }).click();
   const dlg = page.getByRole('dialog', { name: 'Filters' });
-  // Rarely (about 1 run in 30) the first tap right after start-up does not open the dialog; tap again
-  await expect(async () => {
-    if (!(await dlg.isVisible())) await page.getByRole('button', { name: /^Filters/ }).click();
-    await expect(dlg).toBeVisible({ timeout: 2000 });
-  }).toPass({ timeout: 15000 });
   await dlg.getByRole('group', { name: 'People' }).getByRole('button', { name: 'Kit', exact: true }).click();
   await dlg.getByRole('group', { name: 'Status' }).getByRole('button', { name: 'Cancelled' }).click();
   await dlg.getByRole('button', { name: 'Apply' }).click();
