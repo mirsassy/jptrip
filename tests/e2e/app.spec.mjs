@@ -242,6 +242,8 @@ test('ideas: type and kid-friendly filters, booking details, and one-tap Book', 
   await expect(page.locator('[data-idea=I-2]')).toContainText('One star');
   await expect(page.locator('[data-idea=I-2]')).toContainText('Booking: Required, well ahead');
   await expect(page.locator('[data-idea=I-3]')).toContainText('Verify details');
+  // Google Maps opens the place itself (searched by name), not a pin at its coordinates
+  await expect(page.locator('[data-idea=I-2]').getByRole('link', { name: /Google Maps/ })).toHaveAttribute('href', /query=Kaiseki%20house%2C%20/);
   await page.getByRole('button', { name: 'Activity', exact: true }).click();
   await expect(page.locator('.idea-title')).toHaveText(['Morning market']);
   await page.getByRole('button', { name: 'All', exact: true }).click();

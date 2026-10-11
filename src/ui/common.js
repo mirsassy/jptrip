@@ -41,8 +41,11 @@ export function weatherChip(city, date, stay) {
     h('span', { class: `tag ${w.kind}` }, w.kind === 'forecast' ? 'Forecast' : 'Typical'));
 }
 
-/** Google Maps and Apple Maps links for an item's location. */
-/** One "Google Maps" link: the place, or for transport the route from → to. */
+/**
+ * One "Google Maps" link: the place, or for transport the route from → to. Places are searched
+ * by name and address, so Google opens the actual restaurant or hotel (with its hours, photos and
+ * reviews) instead of a dropped pin; coordinates are used only when there is nothing to search by.
+ */
 export function googleMapsLink(it) {
   let href;
   if (it.type === 'transport') {
@@ -50,31 +53,23 @@ export function googleMapsLink(it) {
     const o = end(it.fromLoc, it.from), d = end(it.toLoc, it.to);
     if (!o || !d) return null;
     href = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(o)}&destination=${encodeURIComponent(d)}&travelmode=transit`;
-  } else if (it.loc && !it.loc.approx) {
-    href = `https://www.google.com/maps/search/?api=1&query=${it.loc.lat},${it.loc.lng}`;
   } else {
-    const q = it.address || [it.title, it.city].filter(Boolean).join(', ');
+    const q = placeQuery(it);
     if (!q) return null;
     href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
   }
   return h('a', { class: 'btn small', href, target: '_blank', rel: 'noopener' }, icon('pin', 14), 'Google Maps', icon('ext', 14));
 }
 
-export function mapLinks(it, loc = it.loc) {
-  const name = [it.title, it.address || it.city].filter(Boolean).join(', ');
-  let g, a;
-  if (loc && !loc.approx) {
-    g = `https://www.google.com/maps/search/?api=1&query=${loc.lat},${loc.lng}`;
-    a = `https://maps.apple.com/?ll=${loc.lat},${loc.lng}&q=${encodeURIComponent(it.title || 'Pin')}`;
-  } else {
-    const q = encodeURIComponent(it.address || name || it.city || '');
-    if (!q) return null;
-    g = `https://www.google.com/maps/search/?api=1&query=${q}`;
-    a = `https://maps.apple.com/?q=${q}`;
-  }
-  return h('span', { class: 'row' },
-    h('a', { class: 'btn small', href: g, target: '_blank', rel: 'noopener' }, 'Google Maps', icon('ext', 14)),
-    h('a', { class: 'btn small', href: a, target: '_blank', rel: 'noopener' }, 'Apple Maps', icon('ext', 14)));
+/** What to search Google Maps for: "Name, Address" (or "Name, City"); coordinates as a last resort. */
+export function placeQuery(it) {
+  const generic = !it.title || /^(Stay in |Idea$|Note$)/.test(it.title) || it.type === 'note';
+  const name = generic ? '' : it.title;
+  const where = it.address || (name ? it.city : '');
+  const q = [name, where].filter(Boolean).join(', ');
+  if (q) return q;
+  if (it.loc && !it.loc.approx) return `${it.loc.lat},${it.loc.lng}`;
+  return it.city || '';
 }
 
 /** Only http(s) links from the Sheet become clickable (never javascript: etc.). */

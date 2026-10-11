@@ -5,7 +5,7 @@ import { renderSignIn, settingsCards } from './account.js';
 import { makePass, DEFAULT_FILTERS, activeFilterCount } from '../lib/filters.js';
 import { TYPES, TYPE_LABELS, STATUSES, byTime } from '../lib/model.js';
 import { fmtDay } from '../lib/dates.js';
-import { whoChips, statusBadge, mapLinks, itemTimeLabel, TYPE_ICON, safeUrl } from './common.js';
+import { whoChips, statusBadge, itemTimeLabel, TYPE_ICON, safeUrl } from './common.js';
 import { openEditor, openMoveIdea } from './forms.js';
 import { ideaCard, byIdeaType, typeIcon } from './ideas.js';
 import { getTheme, setTheme } from '../lib/theme.js';
