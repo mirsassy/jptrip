@@ -395,3 +395,49 @@ describe('Apps Script API: fast reads', () => {
     expect(sh.cells.length).toBe(2);
   });
 });
+
+describe('Apps Script API: photos on reservations', () => {
+  const jpeg = (n) => `data:image/jpeg;base64,${'A'.repeat(n)}`;
+  const withReservation = (g, token) => g.post({ action: 'upsert', token, tab: 'Reservations', values: { ID: 'R-1', Name: 'Dinner', Date: '2030-03-06' } });
+
+  it('keeps photos in the Photos tab; the first becomes the cover; only the list is in reads', () => {
+    const g = createGas();
+    const token = login(g, casey).token;
+    withReservation(g, token);
+    const big = jpeg(100000); // spread over several cells
+    const a = g.post({ action: 'addPhoto', token, for: 'R-1', thumb: jpeg(2000), image: big });
+    expect(a.ok).toBe(true);
+    const b = g.post({ action: 'addPhoto', token, for: 'R-1', thumb: jpeg(2000), image: jpeg(500) });
+    expect(b.data.photos.map((p) => p.id)).toEqual([a.id, b.id]);
+    expect(b.data.photos[0]).toMatchObject({ for: 'R-1', by: 'Casey' });
+    expect(JSON.stringify(b.data)).not.toContain('AAAAAAAAAAAAAAAAAAAA'); // pictures are not in reads
+    expect(b.data.tabs.Reservations.rows.find((r) => r.ID === 'R-1')['Pinned photo']).toBe(a.id);
+    expect(g.post({ action: 'photo', token, id: a.id }).image).toBe(big);
+    expect(Object.keys(g.post({ action: 'photoThumbs', token, ids: [a.id, b.id] }).thumbs)).toEqual([a.id, b.id]);
+  });
+
+  it('accepts only JPEG pictures for existing reservations', () => {
+    const g = createGas();
+    const token = login(g, casey).token;
+    withReservation(g, token);
+    expect(g.post({ action: 'addPhoto', token, for: 'R-404', thumb: jpeg(10), image: jpeg(10) }).error).toBe('not_found');
+    expect(g.post({ action: 'addPhoto', token, for: '', thumb: jpeg(10), image: jpeg(10) }).error).toBe('not_found');
+    expect(g.post({ action: 'addPhoto', token, for: 'R-1', thumb: '=IMPORTXML("x")', image: jpeg(10) }).error).toBe('photo_bad');
+    expect(g.post({ action: 'addPhoto', token, for: 'R-1', thumb: jpeg(10), image: 'data:image/svg+xml;base64,PHN2Zz4=' }).error).toBe('photo_bad');
+  });
+
+  it('only the person who added a photo, or the administrator, removes it; the cover moves on', () => {
+    const g = createGas();
+    const casyToken = login(g, casey).token;
+    withReservation(g, casyToken);
+    const blakeToken = login(g, blake).token;
+    const a = g.post({ action: 'addPhoto', token: casyToken, for: 'R-1', thumb: jpeg(10), image: jpeg(10) });
+    const b = g.post({ action: 'addPhoto', token: casyToken, for: 'R-1', thumb: jpeg(10), image: jpeg(10) });
+    expect(g.post({ action: 'deletePhoto', token: blakeToken, id: a.id }).error).toBe('not_yours');
+    const r = g.post({ action: 'deletePhoto', token: casyToken, id: a.id });
+    expect(r.data.photos.map((p) => p.id)).toEqual([b.id]);
+    expect(r.data.tabs.Reservations.rows.find((x) => x.ID === 'R-1')['Pinned photo']).toBe(b.id);
+    expect(g.post({ action: 'deletePhoto', token: login(g, admin).token, id: b.id }).ok).toBe(true);
+    expect(g.post({ action: 'deletePhoto', token: casyToken, id: '' }).error).toBe('not_found');
+  });
+});

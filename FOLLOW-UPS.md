@@ -4,7 +4,8 @@ Open decisions and things that could not be verified while building the app. Iti
 
 ## For the trip organizer to do
 
-- [ ] **Optional script update** (Oct 5): the script now puts the Ideas ID column back by itself if a tool rewrites the tab without it. Until then, keep an **ID** column at the end of Ideas. Paste the new `apps-script/Code.gs`, Save, then Deploy → Manage deployments → pencil → New version → Deploy.
+- [ ] **Update the Sheet's script** (Oct 12, needed for photos on booked activities): paste the new `apps-script/Code.gs`, Save, then Deploy → Manage deployments → pencil → New version → Deploy. The first photo added creates a **Photos** tab, and the Reservations tab gets a **Pinned photo** column at the end.
+- [ ] **Optional script update** (Oct 5, included in the Oct 12 update): the script now puts the Ideas ID column back by itself if a tool rewrites the tab without it. Until then, keep an **ID** column at the end of Ideas. Paste the new `apps-script/Code.gs`, Save, then Deploy → Manage deployments → pencil → New version → Deploy.
 - [x] **Update the Sheet's script again** (needed for Settings → Trip dates, and for faster syncs): paste the new `apps-script/Code.gs`, Save, then Deploy → Manage deployments → pencil → New version → Deploy.
 - [x] **Update the Sheet's script** (needed for the Ideas tab; all ideas have pins): paste the new `apps-script/Code.gs` and `apps-script/appsscript.json` into Extensions → Apps Script, Save, then Deploy → Manage deployments → pencil → New version → Deploy. Then Trip app → Fill IDs and map locations now (repeat until all ideas have pins; it does about 100 per run).
 - [x] Turn on GitHub Pages (done; the app is published).
@@ -18,6 +19,8 @@ Open decisions and things that could not be verified while building the app. Iti
 - [x] **Saving an uploaded file failed** (403 from Drive). Resolved by removing file saving: files are only read.
 
 ## Design decisions to revisit
+
+- [ ] **Photos live in the Sheet** (Photos tab, compressed JPEG text split over cells, about 100 to 270 KB each), not in Drive: no extra permissions, and only signed-in people see them through the app. Up to 30 per booking. Fine for a few hundred photos; for thousands, Drive would be better.
 
 - [ ] **Groups live in the People tab** (Group column; several allowed, comma-separated). The Groups tab is gone. A child's parents are the adults who share a group with them; "Everyone" is always the whole People tab.
 

@@ -9,6 +9,8 @@ import { whoChips, statusBadge, itemTimeLabel, TYPE_ICON, safeUrl } from './comm
 import { openEditor, openMoveIdea } from './forms.js';
 import { ideaCard, byIdeaType, typeIcon } from './ideas.js';
 import { getTheme, setTheme } from '../lib/theme.js';
+import { coverThumb } from './photos.js';
+import { openItemView } from './item.js';
 
 /* ---------------- List: everything that passes the filters, by date ---------------- */
 export function renderList(root) {
@@ -45,7 +47,7 @@ function itemRow(it) {
       h('div', { style: { fontWeight: 550 } }, it.title),
       h('div', { class: 'small muted row', style: { gap: '4px 10px' } }, when ? h('span', null, when) : null, it.city && it.type !== 'transport' ? h('span', null, it.city) : null, it.raw._pending ? h('span', { class: 'pending-tag' }, 'Not synced yet') : null),
       it.type === 'idea' ? null : h('div', { style: { marginTop: '4px' } }, whoChips(it.people, { max: 5 }))),
-    statusBadge(it.status));
+    h('span', { class: 'row', style: { gap: '8px', flexWrap: 'nowrap' } }, statusBadge(it.status), it.type === 'reservation' ? coverThumb(it, () => openItemView(it)) : null));
 }
 
 function filterSummary() {

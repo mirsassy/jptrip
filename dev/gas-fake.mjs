@@ -94,6 +94,7 @@ class FakeSheet {
     return max;
   }
   getRange(row, col, nr, nc) { return new FakeRange(this, row, col, nr, nc); }
+  deleteRow(row) { this.cells.splice(row - 1, 1); }
   set(row, col, v) {
     while (this.cells.length < row) this.cells.push([]);
     const r = this.cells[row - 1];
@@ -123,6 +124,7 @@ class FakeSpreadsheet {
     this.sheets = Object.fromEntries(Object.entries(tabs).map(([n, rows]) => [n, new FakeSheet(this, n, rows)]));
   }
   getSheetByName(n) { return this.sheets[n] || null; }
+  insertSheet(n) { this.sheets[n] = new FakeSheet(this, n, []); return this.sheets[n]; }
   getSpreadsheetTimeZone() { return this.tz; }
   getUrl() { return 'https://docs.google.com/spreadsheets/d/FAKE/edit'; }
   toast() {}

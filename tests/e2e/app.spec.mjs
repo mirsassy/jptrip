@@ -747,3 +747,33 @@ test('installable: manifest, icons and service worker are served', async ({ page
   await expect(page.locator('link[rel=apple-touch-icon]')).toHaveCount(1);
   expect(await page.evaluate(async () => (await navigator.serviceWorker.ready).active?.scriptURL)).toMatch(/sw\.js$/);
 });
+
+test('photos on a booked activity: add from the day, the first shows with the booking, pin another, remove', async ({ page, context }) => {
+  const png = await (await import('node:fs/promises')).readFile(new URL('../../public/icons/icon-192.png', import.meta.url));
+  await open(page, context);
+  await page.getByRole('button', { name: /Fri, Mar 8/ }).click();
+  const row = page.locator('li').filter({ hasText: 'Seafood dinner' }).first();
+  await row.getByRole('button', { name: 'Photos' }).click();
+  const view = page.getByRole('dialog', { name: 'Seafood dinner' });
+  await expect(view.getByText('No photos yet.')).toBeVisible();
+  await view.getByLabel('Choose photos').setInputFiles([{ name: 'a.png', mimeType: 'image/png', buffer: png }, { name: 'b.png', mimeType: 'image/png', buffer: png }]);
+  await expect(view.locator('.photo-cell')).toHaveCount(2, { timeout: 20000 });
+  await expect(view.locator('.photo-cell.is-cover')).toHaveCount(1);
+  await expect(view.locator('.photo-cell').first()).toHaveClass(/is-cover/);
+  // The second one becomes the pinned photo
+  await view.locator('.photo-cell').nth(1).click();
+  const photo = page.getByRole('dialog', { name: 'Seafood dinner' }).last();
+  await expect(photo.locator('img.photo-full')).toHaveAttribute('src', /^data:image\/jpeg;base64,/);
+  await photo.getByRole('button', { name: 'Pin to show with the booking' }).click();
+  await expect(view.locator('.photo-cell').nth(1)).toHaveClass(/is-cover/);
+  await expect.poll(async () => (await sheetRows('Reservations')).find((r) => r.ID === 'R-1')['Pinned photo']).toMatch(/^P-/);
+  // Remove the first (Avery added it)
+  page.once('dialog', (d) => d.accept());
+  await view.locator('.photo-cell').first().click();
+  await page.getByRole('dialog', { name: 'Seafood dinner' }).last().getByRole('button', { name: 'Remove' }).click();
+  await expect(view.locator('.photo-cell')).toHaveCount(1);
+  await view.getByRole('button', { name: 'Close' }).first().click();
+  // The day view shows the pinned photo with the booking
+  await expect(row.getByRole('button', { name: /Photos of Seafood dinner/ }).locator('img')).toHaveAttribute('src', /^data:image\/jpeg/);
+});
+

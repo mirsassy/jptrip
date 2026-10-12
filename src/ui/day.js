@@ -7,6 +7,8 @@ import { whoChips, statusBadge, weatherChip, googleMapsLink, itemTimeLabel, pers
 import { openEditor } from './forms.js';
 import { dayIdeas } from './ideas.js';
 import { renderPlan } from './plan.js';
+import { coverThumb } from './photos.js';
+import { openItemView } from './item.js';
 
 // "By plan" is the default; the key changed when it became the default, so everyone starts there once
 let mode = (() => { try { return localStorage.getItem('trip.dayMode2') || 'plan'; } catch { return 'plan'; } })();
@@ -118,11 +120,16 @@ function timelineRow(e, g, flaggedIds) {
   if (it.type !== 'note' || it.who) meta.push(whoChips(it.people));
   if (it.raw._pending) meta.push(h('span', { class: 'pending-tag' }, 'Not synced yet'));
   const links = e.kind === 'staying' ? null : googleMapsLink(it);
+  // Reservations: their pinned photo, and a way to see or add photos
+  const res = it.type === 'reservation';
+  const photosBtn = res && !it.cover ? h('button', { type: 'button', class: 'btn small', onclick: () => openItemView(it) }, icon('camera', 14), 'Photos') : null;
   return h('li', { class: [it.status === 'Cancelled' ? 'cancelled' : '', flaggedIds.has(it.id) ? 'flagged' : ''].join(' ') },
     h('span', { class: 't' }, time),
     h('span', { class: 'ic' }, icon(e.kind === 'checkout' || e.kind === 'checkin' || e.kind === 'staying' ? e.kind : it.type)),
-    h('div', null, h('div', { class: 'ttl' }, title), meta.length ? h('div', { class: 'meta' }, meta) : null,
-      links ? h('div', { class: 'meta', style: { marginTop: '6px' } }, links) : null),
+    h('div', null,
+      h('div', { class: res && it.cover ? 'ttl-row' : null }, h('div', { class: 'ttl' }, title), res ? coverThumb(it, () => openItemView(it)) : null),
+      meta.length ? h('div', { class: 'meta' }, meta) : null,
+      links || photosBtn ? h('div', { class: 'meta', style: { marginTop: '6px' } }, links, photosBtn) : null),
     h('button', { class: 'icon-btn', 'aria-label': `Edit ${it.title}`, onclick: () => openEditor(it.tab, it.raw) }, icon('edit', 18)));
 }
 

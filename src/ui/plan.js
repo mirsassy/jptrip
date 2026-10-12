@@ -8,6 +8,7 @@ import { fmtShort } from '../lib/dates.js';
 import { whoChips, statusBadge, googleMapsLink, itemTimeLabel, weatherChip } from './common.js';
 import { openItemView } from './item.js';
 import { dayIdeas } from './ideas.js';
+import { coverThumb } from './photos.js';
 
 /** Merges items that are the same plan (by `keyOf`), combining their people. */
 function merge(items, keyOf) {
@@ -78,5 +79,6 @@ function row(e, when, title, sub) {
       h('div', { class: 'ttl' }, title, it.status && it.status !== 'Confirmed' ? [' ', statusBadge(it.status)] : null),
       sub ? h('div', { class: 'small muted' }, sub) : null,
       it.type !== 'note' || it.who ? h('div', { style: { marginTop: '4px' } }, whoChips(e.people)) : null),
+    it.type === 'reservation' ? coverThumb(it, () => openItemView(it)) : null,
     maps ? h('a', { class: 'icon-btn', href: maps.href, target: '_blank', rel: 'noopener', 'aria-label': `${title} in Google Maps` }, icon('pin', 18)) : h('span'));
 }

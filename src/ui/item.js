@@ -1,10 +1,11 @@
 // A read-only view of one plan (stay, travel, reservation, note), with buttons to
-// open it on the map, open its day, or edit it.
+// open it on the map, open its day, or edit it. Reservations also show their photos.
 import { h, icon, sheet } from './dom.js';
 import { state, setDate } from '../lib/store.js';
 import { fmtDay, fmtShort } from '../lib/dates.js';
 import { whoChips, statusBadge, googleMapsLink, itemTimeLabel, safeUrl } from './common.js';
 import { openEditor } from './forms.js';
+import { photoSection } from './photos.js';
 
 const LABEL = { stay: 'Stay', transport: 'Travel', reservation: 'Reservation', note: 'Note', idea: 'Idea' };
 
@@ -31,6 +32,7 @@ export function openItemView(it) {
     it.type === 'note' ? h('p', null, it.title) : null,
     h('dl', { class: 'kv' }, rows.flatMap(([k, v]) => [h('dt', null, k), h('dd', null, v)])),
     it.type !== 'idea' ? h('div', { style: { margin: '10px 0' } }, whoChips(it.people)) : null,
+    it.type === 'reservation' ? photoSection(it.id) : null,
     h('div', { class: 'row', style: { marginTop: '12px' } },
       googleMapsLink(it),
       link ? h('a', { class: 'btn small', href: link, target: '_blank', rel: 'noopener' }, 'Website', icon('ext', 13)) : null,

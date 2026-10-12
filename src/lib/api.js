@@ -128,6 +128,13 @@ export const ERROR_TEXT = {
   file_too_big: 'That file is too big. Files up to 8 MB work; try a screenshot of the important page.',
   file_type: 'That kind of file can’t be read. Use a PDF, a photo or screenshot, or paste the text.',
   nothing_to_read: 'Paste some text or choose a file first.',
+  photo_bad: 'That photo could not be saved. Try another one.',
+  photo_type: 'That kind of picture can’t be read here. Try a JPEG or PNG, or a screenshot of it.',
+  photo_too_big: 'That photo is too large to shrink enough. Try a smaller one or a screenshot.',
+  photo_limit: 'This booking already has the most photos allowed (30). Remove one first.',
+  unknown_action: 'The Sheet’s script needs updating for this. Ask the trip organizer to deploy the latest version.',
+  not_found: 'That was already removed, or no longer exists. Pull down to refresh.',
+  not_yours: 'Only the person who added it, or the trip organizer, can remove it.',
   bad_response: 'The Sheet sent an unexpected reply. Check the Apps Script URL in Settings.',
   server_error: 'The Sheet reported an error.',
 };

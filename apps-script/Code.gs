@@ -12,7 +12,9 @@
  * the app. PINs and tokens are stored only as SHA-256 hashes in Script Properties.
  *
  * Permissions (appsscript.json): this spreadsheet only, and outside requests (Claude,
- * short map links). Uploaded files are read, never stored.
+ * short map links). Files sent for reading are read, never stored. Photos added to
+ * reservations are kept in this spreadsheet's Photos tab (compressed JPEG text), so they
+ * need no Drive access and are seen only through the app by signed-in people.
  *
  * @OnlyCurrentDoc  Limits this script to the spreadsheet it is attached to.
  */
@@ -66,6 +68,16 @@ var UPLOAD_MAX_BYTES = 8 * 1024 * 1024;   // largest file the app may upload
 var TEXT_MAX_CHARS = 100000;              // longest pasted text
 var CLAUDE_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
+// Photos on reservations: one row per photo in the Photos tab. A cell holds at most 50,000
+// characters, so the picture (base64 JPEG, shrunk by the app) is split over IMAGE_PARTS cells.
+var PHOTOS_TAB = 'Photos';
+var PHOTO_CELL = 45000;
+var IMAGE_PARTS = 8;          // up to ~270 KB of JPEG per photo
+var THUMB_MAX = 40000;        // characters of the small square preview
+var PHOTOS_PER_ITEM = 30;
+var PHOTO_HEADERS = ['ID', 'For', 'Uploaded by', 'Uploaded at', 'Thumb'];
+for (var pi = 1; pi <= IMAGE_PARTS; pi++) PHOTO_HEADERS.push('Image ' + pi);
+
 /* ------------------------------------------------------------------ */
 /* Web app entry points                                                */
 /* ------------------------------------------------------------------ */
@@ -112,6 +124,14 @@ function doPost(e) {
           addListValue_(req.column, req.value, req.extra || {});
           return { ok: true, data: readAll_() };
         }));
+      case 'addPhoto':
+        return json_(withLock_(function () { var r = addPhoto_(req, me); if (r.ok) r.data = readAll_(); return r; }));
+      case 'deletePhoto':
+        return json_(withLock_(function () { var r = deletePhoto_(req.id, me); if (r.ok) r.data = readAll_(); return r; }));
+      case 'photoThumbs':
+        return json_({ ok: true, thumbs: photoThumbs_(req.ids) });
+      case 'photo':
+        return json_(photo_(req.id));
       case 'resolveLocation':
         return json_({ ok: true, location: resolveLocation_(String(req.text || '')) });
       case 'extract':
@@ -429,6 +449,7 @@ function readAll_(opts) {
     if (opts && opts.fillIds) fillIds_(name, sh, t);
     out.tabs[name] = { headers: t.headers, rows: t.rows };
   });
+  out.photos = photoList_(ss);
   return out;
 }
 
@@ -591,7 +612,7 @@ function writeCell_(range, header, v) {
   range.setValue(s);
 }
 
-/** If a tool rewrote a tab without its ID column, adds it back at the end (headers is updated too). */
+/** Adds a missing column at the end (e.g. ID, if a tool rewrote a tab without it); headers is updated too. */
 function ensureKeyCol_(sh, headers, key) {
   var col = headers.indexOf(key);
   if (col >= 0) return col;
@@ -1049,4 +1070,102 @@ function installTriggers() {
 
 function timedFill() {
   fillMissing_(50);
+}
+
+/* ------------------------------------------------------------------ */
+/* Photos on reservations                                              */
+/* ------------------------------------------------------------------ */
+
+function photosSheet_(ss, create) {
+  var sh = ss.getSheetByName(PHOTOS_TAB);
+  if (!sh && create) {
+    sh = ss.insertSheet(PHOTOS_TAB);
+    sh.getRange(1, 1, 1, PHOTO_HEADERS.length).setValues([PHOTO_HEADERS]);
+  }
+  return sh;
+}
+
+/** Who added which photo to what: the first four columns only (never the pictures themselves). */
+function photoList_(ss) {
+  var sh = photosSheet_(ss, false);
+  if (!sh || sh.getLastRow() < 2) return [];
+  return sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues()
+    .filter(function (r) { return String(r[0]).trim(); })
+    .map(function (r) {
+      var at = r[3];
+      return { id: String(r[0]), for: String(r[1]), by: String(r[2]), at: at instanceof Date ? at.toISOString() : String(at) };
+    });
+}
+
+var JPEG_PREFIX = 'data:image/jpeg;base64,';
+function validJpeg_(s, max) {
+  s = String(s || '');
+  return s.indexOf(JPEG_PREFIX) === 0 && s.length <= max && /^[A-Za-z0-9+\/=]+$/.test(s.slice(JPEG_PREFIX.length)) ? s : '';
+}
+
+function addPhoto_(req, me) {
+  var ss = SpreadsheetApp.getActive();
+  var resSh = ss.getSheetByName('Reservations');
+  var headers = headerRow_(resSh);
+  var rowIdx = req.for ? findRow_(resSh, headers.indexOf('ID'), String(req.for)) : -1;
+  if (rowIdx < 0) return { ok: false, error: 'not_found' };
+  var thumb = validJpeg_(req.thumb, THUMB_MAX);
+  var image = validJpeg_(req.image, PHOTO_CELL * IMAGE_PARTS);
+  if (!thumb || !image) return { ok: false, error: 'photo_bad' };
+  if (photoList_(ss).filter(function (p) { return p.for === req.for; }).length >= PHOTOS_PER_ITEM) return { ok: false, error: 'photo_limit' };
+
+  var sh = photosSheet_(ss, true);
+  var id = newId_('P');
+  var row = [id, String(req.for), me.name, new Date().toISOString(), thumb];
+  for (var i = 0; i < IMAGE_PARTS; i++) row.push(image.slice(i * PHOTO_CELL, (i + 1) * PHOTO_CELL));
+  // Plain text cells: the picture data must never be read as a formula or number
+  var range = sh.getRange(sh.getLastRow() + 1, 1, 1, row.length);
+  range.setNumberFormat('@');
+  range.setValues([row]);
+
+  // The first photo of a reservation becomes its pinned (cover) photo
+  var pinCol = ensureKeyCol_(resSh, headers, 'Pinned photo');
+  if (!String(resSh.getRange(rowIdx, pinCol + 1).getValue()).trim()) resSh.getRange(rowIdx, pinCol + 1).setValue(id);
+  return { ok: true, id: id };
+}
+
+/** Only the person who added a photo, or the administrator, can remove it. */
+function deletePhoto_(id, me) {
+  var ss = SpreadsheetApp.getActive();
+  var sh = photosSheet_(ss, false);
+  var rowIdx = sh && id ? findRow_(sh, 0, String(id)) : -1;
+  if (rowIdx < 0) return { ok: false, error: 'not_found' };
+  var r = sh.getRange(rowIdx, 1, 1, 3).getValues()[0];
+  if (String(r[2]) !== me.name && me.role !== 'admin') return { ok: false, error: 'not_yours' };
+  sh.deleteRow(rowIdx);
+  // A removed cover photo falls back to the next one (or none)
+  var resSh = ss.getSheetByName('Reservations');
+  var headers = headerRow_(resSh);
+  var pinCol = headers.indexOf('Pinned photo');
+  var resRow = findRow_(resSh, headers.indexOf('ID'), String(r[1]));
+  if (pinCol >= 0 && resRow > 0 && String(resSh.getRange(resRow, pinCol + 1).getValue()) === String(id)) {
+    var next = photoList_(ss).filter(function (p) { return p.for === String(r[1]); })[0];
+    resSh.getRange(resRow, pinCol + 1).setValue(next ? next.id : '');
+  }
+  return { ok: true };
+}
+
+function photoRows_(ids) {
+  var sh = photosSheet_(SpreadsheetApp.getActive(), false);
+  if (!sh || sh.getLastRow() < 2) return [];
+  var want = {};
+  (Array.isArray(ids) ? ids : []).slice(0, 60).forEach(function (i) { want[String(i)] = true; });
+  return sh.getRange(2, 1, sh.getLastRow() - 1, PHOTO_HEADERS.length).getValues().filter(function (r) { return want[String(r[0])]; });
+}
+
+function photoThumbs_(ids) {
+  var out = {};
+  photoRows_(ids).forEach(function (r) { out[String(r[0])] = String(r[4]); });
+  return out;
+}
+
+function photo_(id) {
+  var r = photoRows_([id])[0];
+  if (!r) return { ok: false, error: 'not_found' };
+  return { ok: true, image: r.slice(5).join('') };
 }

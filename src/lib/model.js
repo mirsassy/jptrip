@@ -172,8 +172,15 @@ export function buildModel(data) {
     items.push(it);
   });
 
+  // Photos added to reservations (the list only; pictures are fetched when shown)
+  const photosFor = new Map();
+  (data?.photos || []).forEach((p) => { if (!photosFor.has(p.for)) photosFor.set(p.for, []); photosFor.get(p.for).push(p); });
+
   rows('Reservations').forEach((r) => {
     const it = base('Reservations', 'reservation', r);
+    it.photos = photosFor.get(it.id) || [];
+    // The pinned photo, else the first one added
+    it.cover = it.photos.find((p) => p.id === norm(r['Pinned photo']))?.id || it.photos[0]?.id || '';
     it.date = pd(r.Date);
     if (!it.date) issues.push({ kind: 'bad-dates', tab: 'Reservations', id: it.id, row: r._row });
     it.start = parseTime(r.Time);

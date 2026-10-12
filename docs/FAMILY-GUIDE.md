@@ -86,6 +86,12 @@ To change something, tap the pencil next to it. To cancel a booking, open it and
 
 **Map pin in the wrong place?** In Google Maps, find the place, tap **Share** → **Copy link**. Then in the trip app, open the item, paste the link under **Map location**, tap **Use**, then **Save**.
 
+### Photos of booked activities
+
+Open a booked activity (tap it in **By plan**, or tap **Photos** next to it in the Day view), then **Add photos**. You can pick several at once; they are shrunk before sending. The first photo shows as a thumbnail next to the booking. To show a different one, tap it and choose **Pin to show with the booking**. Only the person who added a photo, or the trip organizer, can remove it.
+
+Photos are kept in the trip Sheet and seen only by family members signed in to the app. Thumbnails you have seen stay on your phone for offline use; adding photos needs internet.
+
 ## Without internet
 
 The app gets the latest plans when you open it (or come back to it), and when you pull the screen down from the top and let go. Pulling down also checks for a new version of the app first. Nothing changes under you while you're reading.
