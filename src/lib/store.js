@@ -213,7 +213,7 @@ export function applyQueue(data, queue) {
 }
 
 let wxTimer = null;
-export function refreshWeatherNow() {
+export function refreshWeatherNow({ maxAgeMs } = {}) {
   clearTimeout(wxTimer);
   wxTimer = setTimeout(async () => {
     const m = state.model;
@@ -226,6 +226,8 @@ export function refreshWeatherNow() {
       it.cities.forEach((c) => { const loc = weatherLoc(m, c, it); if (loc) locs.push(loc); });
     });
     await refreshWeather(state.weather, locs, m.range, {
+      today: jpNow().date,
+      maxAgeMs,
       fetchJson: (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }),
     });
     if (started !== epoch || !state.weather.fetched) return; // nothing new: no redraw

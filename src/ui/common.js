@@ -1,6 +1,7 @@
 import { h, icon } from './dom.js';
 import { state, weatherLoc } from '../lib/store.js';
-import { weatherFor } from '../lib/weather.js';
+import { weatherFor, conditions, wearAdvice } from '../lib/weather.js';
+import { ago } from '../lib/dates.js';
 
 export function personChip(name) {
   const p = state.model.peopleByName.get(name);
@@ -33,12 +34,31 @@ export function weatherChip(city, date, stay) {
   if (!loc) return null;
   const w = weatherFor(state.weather, loc, date);
   if (!w) return h('span', { class: 'wx' }, h('span', { class: 'muted' }, `${city}: weather not loaded yet`));
-  const rain = w.rain === null || w.rain === undefined ? '' : w.kind === 'forecast' ? `${w.rain}% chance of rain` : `rain on ${w.rain}% of days`;
-  return h('span', { class: 'wx', title: w.kind === 'typical' ? 'Typical: 10-year average for this date (±3 days), not a forecast' : 'Open-Meteo forecast' },
+  const rain = w.kind === 'recorded'
+    ? (w.precip ? `${w.precip >= 0.1 ? w.precip.toFixed(1) : '<0.1'} in of rain` : '')
+    : w.rain === null || w.rain === undefined ? '' : w.kind === 'forecast' ? `${w.rain}% chance of rain` : `rain on ${w.rain}% of days`;
+  const sky = conditions(w.code);
+  const TAG = { forecast: 'Forecast', recorded: 'Recorded', typical: 'Typical' };
+  const TITLE = {
+    forecast: `Open-Meteo forecast, updated ${ago(w.fetchedAt)}`,
+    recorded: 'What the weather was that day (Open-Meteo)',
+    typical: 'Typical: 10-year average for this date (±3 days), not a forecast',
+  };
+  return h('span', { class: 'wx', title: TITLE[w.kind] },
     h('span', null, city),
+    sky ? h('span', null, sky) : null,
     h('span', { class: 'hi' }, `${w.hi}°`), h('span', { class: 'muted' }, `/ ${w.lo}°F`),
     rain ? h('span', { class: 'muted' }, `· ${rain}`) : null,
-    h('span', { class: `tag ${w.kind}` }, w.kind === 'forecast' ? 'Forecast' : 'Typical'));
+    h('span', { class: `tag ${w.kind}` }, TAG[w.kind]));
+}
+
+/** "What to wear" for a city and date, from the same weather as the chip. */
+export function wearLine(city, date, stay) {
+  const loc = weatherLoc(state.model, city, stay);
+  const w = loc && weatherFor(state.weather, loc, date);
+  const text = wearAdvice(w);
+  if (!text) return null;
+  return h('div', { class: 'wear small' }, h('b', null, w.kind === 'typical' ? 'Usually: ' : 'Wear: '), text);
 }
 
 /**

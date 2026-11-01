@@ -3,7 +3,7 @@ import { applyTheme } from './lib/theme.js';
 
 applyTheme();
 import { h, icon, clear, toast, sheet } from './ui/dom.js';
-import { state, subscribe, init, sync, setConfig } from './lib/store.js';
+import { state, subscribe, init, sync, setConfig, refreshWeatherNow } from './lib/store.js';
 import { findConflicts } from './lib/conflicts.js';
 import { activeFilterCount } from './lib/filters.js';
 import { ago, fmtJstStamp } from './lib/dates.js';
@@ -191,6 +191,7 @@ async function refresh(say = () => {}) {
   }
   say('Syncing…');
   await sync();
+  refreshWeatherNow({ maxAgeMs: 10 * 60 * 1000 }); // a pull-down also gets a fresh forecast
 }
 
 /** Resolves once a new version has finished downloading (or failed). */

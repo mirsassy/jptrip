@@ -3,7 +3,7 @@ import { state, setDate } from '../lib/store.js';
 import { dayGroups, tripDays, whereabouts } from '../lib/model.js';
 import { makePass, selectedPeople } from '../lib/filters.js';
 import { addDays, fmtDay, jpNow } from '../lib/dates.js';
-import { whoChips, statusBadge, weatherChip, googleMapsLink, itemTimeLabel, personChip } from './common.js';
+import { whoChips, statusBadge, weatherChip, wearLine, googleMapsLink, itemTimeLabel, personChip } from './common.js';
 import { openEditor } from './forms.js';
 import { dayIdeas } from './ideas.js';
 import { renderPlan } from './plan.js';
@@ -97,7 +97,7 @@ function groupCard(g, date, flaggedIds, person, groupName) {
         : g.transit ? `On ${g.transit.title} overnight` : 'Nowhere to sleep booked for tonight')),
     person ? null : whoChips(g.people));
 
-  const wx = h('div', null, g.cities.map((c) => weatherChip(c, date, stay)));
+  const wx = h('div', null, g.cities.map((c) => weatherChip(c, date, stay)), stay?.city ? wearLine(stay.city, date, stay) : null);
 
   const list = h('ul', { class: 'timeline' }, g.timeline.map((e) => timelineRow(e, g, flaggedIds)));
   if (!g.timeline.length) list.append(h('li', null, h('span'), h('span'), h('span', { class: 'muted' }, 'Nothing planned.'), h('span')));

@@ -13,6 +13,11 @@ export function forecastFixture(url) {
       temperature_2m_max: time.map((_, i) => 60 + (lat % 1) * 10 + i * 0.1),
       temperature_2m_min: time.map(() => 48),
       precipitation_probability_max: time.map((_, i) => (i * 7) % 100),
+      weather_code: time.map((_, i) => [0, 2, 3, 61][i % 4]),
+      apparent_temperature_max: time.map(() => 57),
+      apparent_temperature_min: time.map(() => 44),
+      precipitation_sum: time.map(() => 0),
+      wind_speed_10m_max: time.map(() => 9),
     },
   };
 }

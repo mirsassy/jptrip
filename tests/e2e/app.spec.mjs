@@ -286,6 +286,9 @@ test('by plan: one day condensed into Travel, Lodging, Booked activities and Ide
   await expect(page.locator('.seg[aria-label="Show by"] button')).toHaveText(['By plan', 'By group', 'By person']);
   await page.getByRole('button', { name: /Fri, Mar 8/ }).click();
   await expect(page.locator('.pane-main section.card > h3')).toHaveText([/Weather/, /Lodging/, /Travel/, /Booked activities/, /Notes/]);
+  const wx = page.getByRole('region', { name: 'Weather' });
+  await expect(wx.locator('.wx').first()).toContainText(/Clear|Partly cloudy|Cloudy|Light rain/);
+  await expect(wx.locator('.wear').first()).toContainText(/^Wear: .+\.$/);
   await expect(page.locator('.pane-main')).not.toContainText('null');
   const travel = page.getByRole('region', { name: 'Travel' });
   await expect(travel.locator('li')).toHaveCount(1);

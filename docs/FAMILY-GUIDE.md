@@ -60,7 +60,7 @@ Restaurants, then activities, by city, from the trip's research: price, Michelin
 
 All times are **Japan time**.
 
-Weather marked **Forecast** comes from a real forecast (up to about 2 weeks ahead). **Typical** is the usual weather for that date over the past 10 years, not a forecast.
+Weather marked **Forecast** comes from a real forecast (up to about 2 weeks ahead); during the trip it refreshes every hour when you open the app, and pulling down gets the latest. **Recorded** is what the weather actually was on a day that has passed. **Typical** is the usual weather for that date over the past 10 years, not a forecast. Each day also has a one-line **Wear:** suggestion (or **Usually:** for typical weather), based on how warm it feels, rain, snow and wind.
 
 ## Families
 

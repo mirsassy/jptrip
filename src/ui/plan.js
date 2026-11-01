@@ -5,7 +5,7 @@ import { h, icon } from './dom.js';
 import { state } from '../lib/store.js';
 import { byTime } from '../lib/model.js';
 import { fmtShort } from '../lib/dates.js';
-import { whoChips, statusBadge, googleMapsLink, itemTimeLabel, weatherChip } from './common.js';
+import { whoChips, statusBadge, googleMapsLink, itemTimeLabel, weatherChip, wearLine } from './common.js';
 import { openItemView } from './item.js';
 import { dayIdeas } from './ideas.js';
 import { coverThumb } from './photos.js';
@@ -48,9 +48,15 @@ export function renderPlan(root, date, { pass, only }) {
   [...tonight, ...travel, ...booked].forEach((e) => e.it.cities.forEach((c) => { if (!cities.some((x) => lc(x) === lc(c))) cities.push(c); }));
   const stayIn = (c) => tonight.find((e) => lc(e.it.city) === lc(c))?.it;
   const weather = cities.map((c) => weatherChip(c, date, stayIn(c))).filter(Boolean);
+  // What to wear: for where people sleep tonight (else the first city of the day); one line per distinct advice
+  const wearCities = tonight.length ? [...new Set(tonight.map((e) => e.it.city).filter(Boolean))] : cities.slice(0, 1);
+  const wearBy = [];
+  wearCities.forEach((c) => { const el = wearLine(c, date, stayIn(c)); if (el && !wearBy.some((x) => x.el.textContent === el.textContent)) wearBy.push({ c, el }); });
+  if (wearBy.length > 1) wearBy.forEach(({ c, el }) => el.prepend(h('span', { class: 'muted' }, `${c}: `)));
+  const wear = wearBy.map((x) => x.el);
 
   [
-    weather.length ? h('section', { class: 'card plan-day', 'aria-label': 'Weather' }, h('h3', { style: { marginTop: 0 } }, 'Weather'), h('div', null, weather)) : null,
+    weather.length ? h('section', { class: 'card plan-day', 'aria-label': 'Weather' }, h('h3', { style: { marginTop: 0 } }, 'Weather'), h('div', null, weather), wear) : null,
     section('Lodging', 'stay', [
       ...tonight.map((e) => row(e, e.it.date === date ? 'Check-in' : 'Staying', hotelName(e.it), lodgingNote(e))),
       ...leaving.map((e) => row(e, 'Check-out', hotelName(e.it), e.it.city)),
