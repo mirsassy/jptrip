@@ -610,10 +610,12 @@ async function pullDown(page) {
   await page.evaluate(async () => {
     const el = document.querySelector('.pane-main');
     el.scrollTop = 0;
-    const t = (y) => [new Touch({ identifier: 1, target: el, clientX: 150, clientY: y })];
+    const t = (y, x = 150) => [new Touch({ identifier: 1, target: el, clientX: x, clientY: y })];
     el.dispatchEvent(new TouchEvent('touchstart', { touches: t(150), bubbles: true, cancelable: true }));
-    for (let y = 170; y <= 450; y += 40) el.dispatchEvent(new TouchEvent('touchmove', { touches: t(y), bubbles: true, cancelable: true }));
-    el.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: t(450), bubbles: true, cancelable: true }));
+    // Like a real finger: a little sideways and even upward wobble before pulling down
+    [[150, 152], [149, 154], [151, 153]].forEach(([y, x]) => el.dispatchEvent(new TouchEvent('touchmove', { touches: t(y, x), bubbles: true, cancelable: true })));
+    for (let y = 170; y <= 450; y += 40) el.dispatchEvent(new TouchEvent('touchmove', { touches: t(y, 158), bubbles: true, cancelable: true }));
+    el.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: t(450, 158), bubbles: true, cancelable: true }));
   });
 }
 

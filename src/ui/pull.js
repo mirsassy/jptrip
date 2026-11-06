@@ -4,6 +4,7 @@ import { h, icon } from './dom.js';
 
 const THRESHOLD = 70; // px of pull (after resistance) that triggers a refresh
 const MAX = 110;
+const DECIDE_PX = 10;   // movement before telling a pull from a scroll or a sideways swipe
 
 export function pullToRefresh(scroller, onRefresh) {
   const label = h('span', null, 'Pull to refresh');
@@ -32,8 +33,11 @@ export function pullToRefresh(scroller, onRefresh) {
     if (startY === null) return;
     const dy = e.touches[0].clientY - startY;
     const dx = Math.abs(e.touches[0].clientX - startX);
-    if (!dist && dx > dy) { startY = null; return; } // a sideways swipe (e.g. the day strip), not a pull
-    if (dy <= 0 || scroller.scrollTop > 0) { if (dist) reset(); else startY = null; return; }
+    if (!dist) {
+      // A real finger wobbles: decide only once it has moved a little, then by its overall direction
+      if (Math.max(dx, Math.abs(dy)) < DECIDE_PX) return;
+      if (dy <= 0 || dx > dy || scroller.scrollTop > 0) { startY = null; return; } // scrolling up, or a sideways swipe
+    } else if (dy <= 0 || scroller.scrollTop > 0) { reset(); return; }
     dist = dy * 0.5; // resistance, so it feels like a pull
     ind.classList.add('pulling');
     label.textContent = dist >= THRESHOLD ? 'Release to refresh' : 'Pull to refresh';
