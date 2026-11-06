@@ -61,8 +61,33 @@ export async function init() {
   // Back online: send edits made offline (reading the trip waits for opening the app or a pull-down)
   window.addEventListener('online', () => { state.online = true; emit(); if (state.queue.length) sync(); });
   window.addEventListener('offline', () => { state.online = false; emit(); });
-  // Coming back to the app is like opening it: show the latest at once
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sync(); });
+  // Coming back to the app is like opening it: show the latest at once, on today
+  let hiddenAt = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+    if (hiddenAt && Date.now() - hiddenAt > BACK_TO_TODAY_MS) followToday();
+    sync();
+  });
+  // Past midnight in Japan, "today" moves on (unless someone is looking at a day they picked)
+  let lastToday = jpNow().date;
+  setInterval(() => {
+    const t = jpNow().date;
+    if (t === lastToday) return;
+    lastToday = t;
+    if (state.dateAuto) followToday(); else emit(); // "Today" labels move either way
+  }, 60 * 1000);
+}
+
+// Away from the app this long, it opens on today again rather than on the day last picked
+const BACK_TO_TODAY_MS = 30 * 60 * 1000;
+
+/** Back to the default day (today during the trip), following it from now on. */
+export function followToday() {
+  const d = defaultDate(state.model, jpNow().date);
+  state.dateAuto = true;
+  if (state.date === d) return;
+  state.date = d;
+  emit();
 }
 
 export function setConfig(c) {

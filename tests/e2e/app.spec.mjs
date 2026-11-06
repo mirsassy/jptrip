@@ -805,3 +805,24 @@ test('weather tab: daily, weekly and monthly, each day opens in daily', async ({
   await expect(view.getByRole('button', { name: 'Daily' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.wx-day[data-date="2030-03-08"]')).toBeInViewport();
 });
+
+test('weather on a travel day: airports become a short legs line, not empty weather rows; today stands out', async ({ page, context }) => {
+  await api({ action: 'upsert', tab: 'Transport', values: { ID: 'T-air', Date: '2030-03-04', Depart: '08:00', Mode: 'Flight', From: 'New York (JFK) Terminal 7', To: 'Tokyo (Haneda) Terminal 3', Who: 'Everyone' } });
+  await open(page, context, { hash: '#weather' });
+  await page.getByRole('group', { name: 'Weather view' }).getByRole('button', { name: 'Daily' }).click();
+  const today = page.locator('.wx-day.today');
+  await expect(today.locator('.wx-legs')).toContainText('✈ JFK → Tokyo');
+  await expect(today).not.toContainText('weather not loaded');
+  await expect(today).not.toContainText('Terminal');
+  await page.getByRole('group', { name: 'Weather view' }).getByRole('button', { name: 'Weekly' }).click();
+  await expect(page.locator('.wx-week.now .wx-cell.today')).toContainText('Today');
+});
+
+test('day view: a Today button brings back today after picking another day', async ({ page, context }) => {
+  await open(page, context, { when: '2030-03-06T09:00:00+09:00' });
+  await expect(page.locator('.date-label')).toContainText('today');
+  await expect(page.getByRole('button', { name: 'Today', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: /Fri, Mar 8/ }).click();
+  await page.getByRole('button', { name: 'Today', exact: true }).click();
+  await expect(page.locator('.date-label')).toContainText(/Wed, Mar 6.*today/);
+});

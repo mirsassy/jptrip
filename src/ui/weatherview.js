@@ -6,6 +6,7 @@ import { state, weatherLoc } from '../lib/store.js';
 import { makePass, selectedPeople } from '../lib/filters.js';
 import { weatherFor, conditions, wearAdvice } from '../lib/weather.js';
 import { addDays, fmtDay, fmtShort, jpNow, ago } from '../lib/dates.js';
+import { placeCode } from './month.js';
 
 const MODES = [['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly']];
 const MODE_KEY = 'trip.wxMode';
@@ -40,11 +41,23 @@ function placesOn(m, date, pass, only) {
   const out = [];
   const add = (city, stay) => { if (city && !out.some((x) => x.city.toLowerCase() === city.toLowerCase())) out.push({ city, stay }); };
   m.items.filter((it) => it.type === 'stay' && it.date <= date && date < it.endDate && mine(it)).forEach((st) => add(st.city, st));
-  m.items.filter((it) => it.type === 'transport' && it.date === date && mine(it)).forEach((t) => t.cities.forEach((c) => add(c, null)));
-  return out.map((p) => {
+  // Travel ends count only when they are trip cities (in Lists); airports and stations are shown as the day's legs instead
+  const legs = m.items.filter((it) => it.type === 'transport' && it.date === date && mine(it)).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+  legs.forEach((t) => t.cities.forEach((c) => { if (m.cityCoord(c)) add(c, null); }));
+  const places = out.map((p) => {
     const loc = weatherLoc(m, p.city, p.stay);
     return { ...p, w: loc ? weatherFor(state.weather, loc, date) : null };
   });
+  places.legs = legs;
+  return places;
+}
+
+/** "✈ JFK → HND · Shinkansen Tokyo → Kanazawa": the day's travel, short. */
+function legsLine(legs) {
+  if (!legs?.length) return null;
+  const plane = (t) => /flight|fly|plane|air/i.test(`${t.mode} ${t.carrier}`);
+  return h('div', { class: 'small muted wx-legs' }, legs.map((t, i) => [i ? ' · ' : '', plane(t) ? '✈ ' : `${t.mode || 'Travel'} `,
+    `${placeCode(t.from || '?')} → ${placeCode(t.to || '?')}`]));
 }
 
 export function renderWeather(root) {
@@ -82,7 +95,8 @@ function renderDaily(root, days, today) {
   days.forEach(({ date, places }) => {
     const card = h('section', { class: `card wx-day${date === today ? ' today' : ''}`, 'aria-label': fmtDay(date), dataset: { date } },
       h('h3', null, fmtDay(date), date === today ? h('span', { class: 'chip' }, 'Today') : null),
-      places.length ? places.map((p) => cityRow(p)) : h('p', { class: 'small muted', style: { margin: 0 } }, 'No stay or travel this day.'),
+      legsLine(places.legs),
+      places.length ? places.map((p) => cityRow(p)) : h('p', { class: 'small muted', style: { margin: 0 } }, places.legs.length ? 'No weather for the travel stops.' : 'No stay or travel this day.'),
       wearFor(places));
     if (date === (jumpTo || today)) target = card;
     list.append(card);
@@ -140,12 +154,13 @@ function renderWeekly(root, days, today, openDaily) {
     const wetDays = week.filter((d) => d.places.some((p) => wet(p.w))).length;
     // Pack for the coldest day of the week
     const coldest = all.reduce((a, b) => ((b.w.feelsLo ?? b.w.lo) < (a.w.feelsLo ?? a.w.lo) ? b : a));
-    root.append(h('section', { class: 'card wx-week' }, head,
+    const thisWeek = week.some((d) => d.date === today);
+    const card = h('section', { class: `card wx-week${thisWeek ? ' now' : ''}` }, head,
       cities.length ? h('div', { class: 'small muted' }, cities.join(' → ')) : null,
       h('div', { class: 'wx-strip' }, week.map((d) => {
         const p = d.places.find((x) => x.stay && x.w) || d.places.find((x) => x.w);
         return h('button', { type: 'button', class: `wx-cell${d.date === today ? ' today' : ''}`, 'aria-label': `${fmtDay(d.date)} weather`, onclick: () => openDaily(d.date) },
-          h('span', { class: 'small muted' }, WEEKDAYS[new Date(`${d.date}T00:00:00Z`).getUTCDay()]),
+          h('span', { class: 'small muted' }, d.date === today ? 'Today' : WEEKDAYS[new Date(`${d.date}T00:00:00Z`).getUTCDay()]),
           h('span', { class: 'small' }, String(+d.date.slice(8))),
           h('span', { class: 'wx-sym', 'aria-hidden': 'true' }, symbol(p?.w)),
           p ? h('span', { class: 'hi' }, `${p.w.hi}°`) : h('span', { class: 'muted' }, '–'),
@@ -155,7 +170,9 @@ function renderWeekly(root, days, today, openDaily) {
       h('ul', { class: 'wx-facts small' },
         h('li', null, `Warmest ${warm.w.hi}°F (${warm.city}), coldest ${cold.w.lo}°F (${cold.city})`),
         h('li', null, wetDays ? `Rain likely on ${wetDays} of ${week.length} days` : 'Little rain expected'),
-        h('li', null, h('b', null, 'Pack for: '), wearAdvice(coldest.w)))));
+        h('li', null, h('b', null, 'Pack for: '), wearAdvice(coldest.w))));
+    root.append(card);
+    if (thisWeek) requestAnimationFrame(() => card.scrollIntoView({ block: 'start' }));
   }
 }
 
@@ -176,7 +193,7 @@ function renderMonthly(root, days, today, openDaily) {
       if (p) inMonth.push(p);
       grid.append(day
         ? h('button', { type: 'button', class: `mcell wx-mcell${d === today ? ' today' : ''}`, 'aria-label': `${fmtDay(d)} weather`, onclick: () => openDaily(d) },
-          h('span', { class: 'mnum' }, String(+d.slice(8))),
+          h('span', { class: 'mnum' }, String(+d.slice(8)), d === today ? h('span', { class: 'today-tag' }, ' Today') : null),
           h('span', { class: 'wx-sym', 'aria-hidden': 'true' }, symbol(p?.w)),
           p ? h('span', null, h('b', { class: 'hi' }, `${p.w.hi}°`), h('span', { class: 'muted' }, ` ${p.w.lo}°`)) : null,
           p ? h('span', { class: 'small muted wx-mcity' }, p.city) : null)

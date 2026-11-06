@@ -29,7 +29,7 @@ After 5 wrong PINs in a row the app waits 15 minutes before you can try again; a
 The tabs at the bottom (top on a computer): **Day**, **Month**, **Weather**, **List**, **Ideas**, **Issues**.
 
 ### Day
-Pick a date with the arrows or the strip of days. Three ways to see it (buttons at the top):
+Pick a date with the arrows or the strip of days. During the trip the app opens on today, and goes back to today when you return to it after half an hour or more; **Today** next to the date jumps back. Three ways to see it (buttons at the top):
 
 - **By plan** (opens first): the day condensed for everyone, in this order:
   - **Weather** for each city you're in
@@ -51,7 +51,7 @@ The round **map** button (bottom left, on the Month view) opens the **trip map**
 
 The **Weather** button at the bottom shows the weather for every day of the trip, for the cities you're in:
 
-- **Daily**: each day's conditions, high and low, feels-like, rain and wind per city, and what to wear. It opens on today during the trip.
+- **Daily**: each day's conditions, high and low, feels-like, rain and wind per city, and what to wear. Travel days also list the legs (for example ✈ JFK → HND). It opens on today during the trip.
 - **Weekly**: one card per trip week, with a strip of the seven days, the warmest and coldest, how many days rain is likely, and what to pack for the coldest day.
 - **Monthly**: a calendar with each day's weather. Tap a day (in Weekly or Monthly) to see it in Daily.
 

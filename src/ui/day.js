@@ -1,5 +1,5 @@
 import { h, icon, clear } from './dom.js';
-import { state, setDate } from '../lib/store.js';
+import { state, setDate, followToday } from '../lib/store.js';
 import { dayGroups, tripDays, whereabouts } from '../lib/model.js';
 import { makePass, selectedPeople } from '../lib/filters.js';
 import { addDays, fmtDay, jpNow } from '../lib/dates.js';
@@ -31,7 +31,8 @@ export function renderDay(root, conflicts) {
   const input = h('input', { type: 'date', value: date, min: m.range?.start, max: m.range?.end, 'aria-label': 'Pick a date', onchange: (e) => e.target.value && setDate(e.target.value) });
   root.append(h('div', { class: 'datebar' },
     h('button', { class: 'icon-btn', 'aria-label': 'Previous day', onclick: () => setDate(addDays(date, -1)) }, icon('chevl')),
-    h('div', { class: 'date-label' }, fmtDay(date), date === today ? h('span', { class: 'muted small' }, ' · today') : null, input),
+    h('div', { class: 'date-label' }, h('span', null, fmtDay(date)), date === today ? h('span', { class: 'muted small' }, ' · today') : null, input,
+      date !== today && m.range && today >= m.range.start && today <= m.range.end ? h('button', { type: 'button', class: 'btn small today-btn', onclick: (e) => { e.stopPropagation(); followToday(); } }, 'Today') : null),
     h('button', { class: 'icon-btn', 'aria-label': 'Next day', onclick: () => setDate(addDays(date, 1)) }, icon('chevr'))));
 
   const strip = h('div', { class: 'daystrip', role: 'group', 'aria-label': 'Trip days' }, days.map((d) => h('button', {

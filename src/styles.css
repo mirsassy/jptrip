@@ -395,3 +395,10 @@ body[data-view="setup"] .sync-pill, body[data-view="setup"] header .icon-btn, bo
 .wx-mcell { align-items: flex-start; }
 .wx-mcell .wx-sym { font-size: 1.1rem; }
 .wx-mcity { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+
+/* Today stands out in the weather and month calendars */
+.wx-cell.today, .wx-mcell.today, .mcell.today { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border-color: var(--accent); border-width: 2px; }
+.today-tag { font-size: .62rem; font-weight: 700; color: var(--accent); text-transform: uppercase; }
+.wx-week.now { border: 2px solid var(--accent); }
+.wx-legs { margin: -2px 0 6px; }
+.today-btn { margin-left: 8px; position: relative; z-index: 1; }
