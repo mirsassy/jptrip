@@ -16,6 +16,8 @@ Open decisions and things that could not be verified while building the app. Iti
 
 ## Come back to
 
+- [x] **A deploy stuck at "updating_pages"** (Nov 6): a newer push cancelled a deployment midway, and the next one timed out. Deploys now queue instead of cancelling each other.
+
 - [x] **Saving an uploaded file failed** (403 from Drive). Resolved by removing file saving: files are only read.
 
 ## Design decisions to revisit
