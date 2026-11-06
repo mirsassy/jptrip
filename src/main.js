@@ -3,10 +3,10 @@ import { applyTheme } from './lib/theme.js';
 
 applyTheme();
 import { h, icon, clear, toast, sheet } from './ui/dom.js';
-import { state, subscribe, init, sync, setConfig, refreshWeatherNow } from './lib/store.js';
+import { state, subscribe, init, sync, setConfig, refreshWeatherNow, setDate } from './lib/store.js';
 import { findConflicts } from './lib/conflicts.js';
 import { activeFilterCount } from './lib/filters.js';
-import { ago, fmtJstStamp } from './lib/dates.js';
+import { ago, fmtJstStamp, addDays } from './lib/dates.js';
 import { ERROR_TEXT } from './lib/api.js';
 import { renderDay } from './ui/day.js';
 import { renderMonth } from './ui/month.js';
@@ -14,6 +14,7 @@ import { renderWeather } from './ui/weatherview.js';
 import { renderList, renderIdeas, renderIssues, renderSettings, openFilters } from './ui/views.js';
 import { openAddMenu } from './ui/forms.js';
 import { pullToRefresh } from './ui/pull.js';
+import { onSwipe } from './ui/swipe.js';
 
 const VIEWS = [
   ['day', 'Day', 'day'],
@@ -149,7 +150,12 @@ function render() {
   } else if (view !== 'map' || isDesktop()) {
     const target = view === 'map' ? 'day' : view;
     if (!typing) {
-      if (target === 'day') renderDay(paneMain, conflicts);
+      if (target === 'day') {
+        renderDay(paneMain, conflicts);
+        // After a swipe, the new day slides in from the side it came from
+        const dir = paneMain.dataset.slide;
+        if (dir) { delete paneMain.dataset.slide; paneMain.classList.remove('slide-left', 'slide-right'); void paneMain.offsetWidth; paneMain.classList.add(`slide-${dir}`); setTimeout(() => paneMain.classList.remove(`slide-${dir}`), 250); }
+      }
       if (target === 'month') renderMonth(paneMain);
       if (target === 'list') renderList(paneMain);
       if (target === 'ideas') renderIdeas(paneMain);
@@ -184,6 +190,19 @@ init().then(() => {
 
 // Pull down from the top (or tap the sync pill): first look for a new version of the app, then sync
 pullToRefresh(paneMain, (say) => refresh(say));
+// Day view: swipe left for the next day, right for the previous one (within the trip)
+onSwipe(paneMain, {
+  enabled: () => route() === 'day' && !needsSetup() && !document.querySelector('.sheet-wrap'),
+  onLeft: () => stepDay(1),
+  onRight: () => stepDay(-1),
+});
+function stepDay(n) {
+  const r = state.model.range;
+  const next = addDays(state.date, n);
+  if (r && (next < r.start || next > r.end)) { toast(n > 0 ? 'That’s the last day of the trip.' : 'That’s the first day of the trip.', 1800); return; }
+  paneMain.dataset.slide = n > 0 ? 'left' : 'right';
+  setDate(next);
+}
 async function refresh(say = () => {}) {
   if (needsSetup()) return;
   if (navigator.onLine && swReg) {

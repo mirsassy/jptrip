@@ -29,7 +29,7 @@ After 5 wrong PINs in a row the app waits 15 minutes before you can try again; a
 The tabs at the bottom (top on a computer): **Day**, **Month**, **Weather**, **List**, **Ideas**, **Issues**.
 
 ### Day
-Pick a date with the arrows or the strip of days. During the trip the app opens on today, and goes back to today when you return to it after half an hour or more; **Today** next to the date jumps back. Three ways to see it (buttons at the top):
+Pick a date with the arrows or the strip of days, or swipe left (next day) and right (previous day). During the trip the app opens on today, and goes back to today when you return to it after half an hour or more; **Today** next to the date jumps back. Three ways to see it (buttons at the top):
 
 - **By plan** (opens first): the day condensed for everyone, in this order:
   - **Weather** for each city you're in

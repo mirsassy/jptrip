@@ -826,3 +826,24 @@ test('day view: a Today button brings back today after picking another day', asy
   await page.getByRole('button', { name: 'Today', exact: true }).click();
   await expect(page.locator('.date-label')).toContainText(/Wed, Mar 6.*today/);
 });
+
+test('day view: swipe left for the next day, right for the previous; the day strip still scrolls', async ({ page, context }) => {
+  await open(page, context, { when: '2030-03-06T09:00:00+09:00' });
+  const swipe = (sel, dx, dy = 0) => page.evaluate(([sel, dx, dy]) => {
+    const el = document.querySelector(sel);
+    const r = el.getBoundingClientRect();
+    const x = r.left + r.width / 2, y = r.top + Math.min(r.height / 2, 40);
+    const t = (cx, cy) => [new Touch({ identifier: 2, target: el, clientX: cx, clientY: cy })];
+    el.dispatchEvent(new TouchEvent('touchstart', { touches: t(x, y), bubbles: true }));
+    el.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: t(x + dx, y + dy), bubbles: true }));
+  }, [sel, dx, dy]);
+  await expect(page.locator('.date-label')).toContainText('Wed, Mar 6');
+  await swipe('.pane-main section.card', -120);
+  await expect(page.locator('.date-label')).toContainText('Thu, Mar 7');
+  await swipe('.pane-main section.card', 120);
+  await swipe('.pane-main section.card', 120);
+  await expect(page.locator('.date-label')).toContainText('Tue, Mar 5');
+  await swipe('.pane-main section.card', -40, 200); // mostly up/down: scrolling, not a swipe
+  await swipe('.daystrip', -150); // the strip of days scrolls on its own
+  await expect(page.locator('.date-label')).toContainText('Tue, Mar 5');
+});

@@ -402,3 +402,10 @@ body[data-view="setup"] .sync-pill, body[data-view="setup"] header .icon-btn, bo
 .wx-week.now { border: 2px solid var(--accent); }
 .wx-legs { margin: -2px 0 6px; }
 .today-btn { margin-left: 8px; position: relative; z-index: 1; }
+
+/* Day view: a swiped-to day slides in */
+@keyframes slide-in-left { from { transform: translateX(28px); opacity: .4; } to { transform: none; opacity: 1; } }
+@keyframes slide-in-right { from { transform: translateX(-28px); opacity: .4; } to { transform: none; opacity: 1; } }
+.pane-main.slide-left > * { animation: slide-in-left .18s ease-out; }
+.pane-main.slide-right > * { animation: slide-in-right .18s ease-out; }
+@media (prefers-reduced-motion: reduce) { .pane-main.slide-left > *, .pane-main.slide-right > * { animation: none; } }
