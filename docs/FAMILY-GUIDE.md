@@ -26,7 +26,7 @@ After 5 wrong PINs in a row the app waits 15 minutes before you can try again; a
 
 ## Find your way around
 
-The tabs at the bottom (top on a computer): **Day**, **Month**, **List**, **Ideas**, **Issues**.
+The tabs at the bottom (top on a computer): **Day**, **Month**, **Weather**, **List**, **Ideas**, **Issues**.
 
 ### Day
 Pick a date with the arrows or the strip of days. Three ways to see it (buttons at the top):
@@ -46,6 +46,16 @@ Tap a plan to see its details (confirmation number, address, who), with **Google
 The whole trip on a calendar. Each day shows the city and hotel with colored dots for who is there ("All" for everyone), reservations in red, and ✈ with the names of anyone flying and their route, e.g. (JFK→HND). Tap a detail to see it, or the date to open that day.
 
 The round **map** button (bottom left, on the Month view) opens the **trip map**: hotels, travel as dashed lines and drives between hotels as dotted lines, with arrows for the direction. Tap **Filters** to show one day, some people, only hotels, travel or bookings, or only Japan. Tap a pin for details and **Google Maps**. Tap the button again to close the map.
+
+### Weather
+
+The **Weather** button at the bottom shows the weather for every day of the trip, for the cities you're in:
+
+- **Daily**: each day's conditions, high and low, feels-like, rain and wind per city, and what to wear. It opens on today during the trip.
+- **Weekly**: one card per trip week, with a strip of the seven days, the warmest and coldest, how many days rain is likely, and what to pack for the coldest day.
+- **Monthly**: a calendar with each day's weather. Tap a day (in Weekly or Monthly) to see it in Daily.
+
+**Recorded** is what the weather was, **Forecast** covers the next 16 days, and **Typical** is the 10-year average for dates further out. Pull down to refresh.
 
 ### Ideas
 Restaurants, then activities, by city, from the trip's research: price, Michelin, kid-friendliness, who it suits, how to book, opening times, and **Why** it's recommended. **Verify details** means the information may be out of date. Filter by type or **Kid-friendly only**. **Book** turns an idea into a reservation. In the Day view, an idea warns **May be closed this day** when its opening notes say so.

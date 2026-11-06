@@ -334,6 +334,8 @@ test('offline: app and data load without a connection, edits queue and sync late
   await page.getByRole('button', { name: /Fri, Mar 8/ }).click();
   await expect(page.getByText('Seafood dinner', { exact: true })).toBeVisible(); // data from the device
   await expect(page.locator('.wx').first()).toContainText('°F'); // weather from the device
+  // Nothing wider than the screen (a too-wide top bar makes phones zoom out)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 
   await page.getByRole('button', { name: 'Add to the trip' }).click();
   await page.getByRole('button', { name: 'Note', exact: true }).click();
@@ -780,3 +782,26 @@ test('photos on a booked activity: add from the day, the first shows with the bo
   await expect(row.getByRole('button', { name: /Photos of Seafood dinner/ }).locator('img')).toHaveAttribute('src', /^data:image\/jpeg/);
 });
 
+
+test('weather tab: daily, weekly and monthly, each day opens in daily', async ({ page, context }, info) => {
+  await open(page, context, { hash: '#weather' });
+  await expect(page.getByRole('link', { name: 'Weather' }).first()).toHaveAttribute('aria-current', 'page');
+  const view = page.getByRole('group', { name: 'Weather view' });
+  await view.getByRole('button', { name: 'Daily' }).click();
+  const today = page.locator('.wx-day.today');
+  await expect(today).toContainText('Today');
+  await expect(today.locator('.wx-row').first()).toContainText(/°F/);
+  await expect(today.locator('.wear').first()).toContainText(/^(Wear|Usually): .+\./);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+  if (process.env.SHOTS) await page.screenshot({ path: `test-results/wx-daily-${info.project.name}.png` });
+  await view.getByRole('button', { name: 'Weekly' }).click();
+  await expect(page.locator('.wx-week h3').first()).toContainText(/^Week 1 · /);
+  await expect(page.locator('.wx-week').first()).toContainText('Pack for:');
+  if (process.env.SHOTS) await page.screenshot({ path: `test-results/wx-weekly-${info.project.name}.png` });
+  await view.getByRole('button', { name: 'Monthly' }).click();
+  await expect(page.getByRole('grid', { name: /weather$/ }).first()).toBeVisible();
+  if (process.env.SHOTS) await page.screenshot({ path: `test-results/wx-monthly-${info.project.name}.png` });
+  await page.getByRole('button', { name: /Fri, Mar 8 weather/ }).click();
+  await expect(view.getByRole('button', { name: 'Daily' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.wx-day[data-date="2030-03-08"]')).toBeInViewport();
+});

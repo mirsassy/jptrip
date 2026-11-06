@@ -10,6 +10,7 @@ import { ago, fmtJstStamp } from './lib/dates.js';
 import { ERROR_TEXT } from './lib/api.js';
 import { renderDay } from './ui/day.js';
 import { renderMonth } from './ui/month.js';
+import { renderWeather } from './ui/weatherview.js';
 import { renderList, renderIdeas, renderIssues, renderSettings, openFilters } from './ui/views.js';
 import { openAddMenu } from './ui/forms.js';
 import { pullToRefresh } from './ui/pull.js';
@@ -17,6 +18,7 @@ import { pullToRefresh } from './ui/pull.js';
 const VIEWS = [
   ['day', 'Day', 'day'],
   ['month', 'Month', 'month'],
+  ['weather', 'Weather', 'weather'],
   ['list', 'List', 'list'],
   ['ideas', 'Ideas', 'idea'],
   ['issues', 'Issues', 'issues'],
@@ -78,7 +80,7 @@ function route() {
     if (!needsSetup()) setTimeout(() => { if (!settingsDlg) toggleSettings(); });
     return lastView;
   }
-  const known = ['day', 'month', 'map', 'list', 'ideas', 'issues'];
+  const known = ['day', 'month', 'weather', 'map', 'list', 'ideas', 'issues'];
   return known.includes(hash) ? hash : 'day';
 }
 
@@ -108,7 +110,7 @@ function renderChrome(view) {
   else if (!state.lastSynced) text = q ? `Not synced yet · ${q} waiting` : 'Not synced yet';
   else text = `Synced ${ago(state.lastSynced)}${q ? ` · ${q} waiting` : ''}`;
   syncPill.className = `sync-pill ${cls}`;
-  clear(syncPill).append(h('span', { class: 'dot' }), text);
+  clear(syncPill).append(h('span', { class: 'dot' }), h('span', { class: 'pill-text' }, text));
   syncPill.title = `Last synced ${fmtJstStamp(state.lastSynced)}. Tap to sync now.`;
 }
 
@@ -152,6 +154,7 @@ function render() {
       if (target === 'list') renderList(paneMain);
       if (target === 'ideas') renderIdeas(paneMain);
       if (target === 'issues') renderIssues(paneMain, conflicts);
+      if (target === 'weather') renderWeather(paneMain);
       if (errorBanner) paneMain.prepend(errorBanner);
     }
   }
