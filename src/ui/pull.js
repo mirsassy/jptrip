@@ -27,9 +27,29 @@ export function pullToRefresh(scroller, onRefresh) {
     startY = e.touches[0].clientY;
     startX = e.touches[0].clientX;
     dist = 0;
+    follow(e.target);
   }, { passive: true });
 
-  scroller.addEventListener('touchmove', (e) => {
+  // Listen on the touched element itself: a redraw mid-pull takes it out of the page, and its
+  // later events then no longer reach the scroller
+  let target = null;
+  const follow = (el) => {
+    unfollow();
+    target = el;
+    el.addEventListener('touchmove', move, { passive: false });
+    el.addEventListener('touchend', end);
+    el.addEventListener('touchcancel', cancel);
+  };
+  const unfollow = () => {
+    if (!target) return;
+    target.removeEventListener('touchmove', move);
+    target.removeEventListener('touchend', end);
+    target.removeEventListener('touchcancel', cancel);
+    target = null;
+  };
+  const cancel = () => { unfollow(); reset(); };
+
+  const move = (e) => {
     if (startY === null) return;
     const dy = e.touches[0].clientY - startY;
     const dx = Math.abs(e.touches[0].clientX - startX);
@@ -43,9 +63,10 @@ export function pullToRefresh(scroller, onRefresh) {
     label.textContent = dist >= THRESHOLD ? 'Release to refresh' : 'Pull to refresh';
     show(dist);
     if (e.cancelable) e.preventDefault(); // keep the page from bouncing while pulling
-  }, { passive: false });
+  };
 
   const end = async () => {
+    unfollow();
     if (startY === null) return;
     const go = dist >= THRESHOLD;
     startY = null;
@@ -62,6 +83,4 @@ export function pullToRefresh(scroller, onRefresh) {
       reset();
     }
   };
-  scroller.addEventListener('touchend', end);
-  scroller.addEventListener('touchcancel', reset);
 }

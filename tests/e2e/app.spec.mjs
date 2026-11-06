@@ -831,21 +831,31 @@ test('day view: a Today button brings back today after picking another day', asy
 
 test('day view: swipe left for the next day, right for the previous; the day strip still scrolls', async ({ page, context }) => {
   await open(page, context, { when: '2030-03-06T09:00:00+09:00' });
-  const swipe = (sel, dx, dy = 0) => page.evaluate(([sel, dx, dy]) => {
+  const swipe = (sel, dx, dy = 0) => page.evaluate(async ([sel, dx, dy]) => {
     const el = document.querySelector(sel);
     const r = el.getBoundingClientRect();
     const x = r.left + r.width / 2, y = r.top + Math.min(r.height / 2, 40);
     const t = (cx, cy) => [new Touch({ identifier: 2, target: el, clientX: cx, clientY: cy })];
-    el.dispatchEvent(new TouchEvent('touchstart', { touches: t(x, y), bubbles: true }));
-    el.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: t(x + dx, y + dy), bubbles: true }));
-  }, [sel, dx, dy]);
+    el.dispatchEvent(new TouchEvent('touchstart', { touches: t(x, y), bubbles: true, cancelable: true }));
+    // A finger's pace: one move per frame over about 100 ms
+    for (let i = 1; i <= 6; i++) {
+      await new Promise((r) => setTimeout(r, 16));
+      el.dispatchEvent(new TouchEvent('touchmove', { touches: t(x + (dx * i) / 6, y + (dy * i) / 6), bubbles: true, cancelable: true }));
+    }
+    el.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: t(x + dx, y + dy), bubbles: true, cancelable: true }));
+  }, [sel, dx, dy]).then(() => settled());
+  // The day glides out and the next one in; wait until it is back in place
+  const settled = () => expect.poll(() => page.evaluate(() => { const p = document.querySelector('.pane-main'); return `${p.style.transform}|${p.style.transition}`; })).toMatch(/^\|(none)?$/);
   await expect(page.locator('.date-label')).toContainText('Wed, Mar 6');
   await swipe('.pane-main section.card', -120);
   await expect(page.locator('.date-label')).toContainText('Thu, Mar 7');
   await swipe('.pane-main section.card', 120);
+  await expect(page.locator('.date-label')).toContainText('Wed, Mar 6');
   await swipe('.pane-main section.card', 120);
   await expect(page.locator('.date-label')).toContainText('Tue, Mar 5');
   await swipe('.pane-main section.card', -40, 200); // mostly up/down: scrolling, not a swipe
+  await swipe('.pane-main section.card', -30); // too short: springs back
+  await expect(page.locator('.date-label')).toContainText('Tue, Mar 5');
   await swipe('.daystrip', -150); // the strip of days scrolls on its own
   await expect(page.locator('.date-label')).toContainText('Tue, Mar 5');
 });

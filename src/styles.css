@@ -403,9 +403,8 @@ body[data-view="setup"] .sync-pill, body[data-view="setup"] header .icon-btn, bo
 .wx-legs { margin: -2px 0 6px; }
 .today-btn { margin-left: 8px; position: relative; z-index: 1; }
 
-/* Day view: a swiped-to day slides in */
-@keyframes slide-in-left { from { transform: translateX(28px); opacity: .4; } to { transform: none; opacity: 1; } }
-@keyframes slide-in-right { from { transform: translateX(-28px); opacity: .4; } to { transform: none; opacity: 1; } }
-.pane-main.slide-left > * { animation: slide-in-left .18s ease-out; }
-.pane-main.slide-right > * { animation: slide-in-right .18s ease-out; }
-@media (prefers-reduced-motion: reduce) { .pane-main.slide-left > *, .pane-main.slide-right > * { animation: none; } }
+
+
+/* Swiping between days: the coming day's name in the uncovered space */
+.swipe-hint { position: fixed; left: 0; z-index: 4; opacity: 0; pointer-events: none; transform: translateY(-50%); transition: opacity .12s;
+  font-weight: 650; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; box-shadow: var(--shadow); white-space: nowrap; }
